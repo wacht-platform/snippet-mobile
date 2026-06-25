@@ -18,6 +18,7 @@ class SessionsScreen extends StatefulWidget {
 
 class _SessionsScreenState extends State<SessionsScreen> {
   late Future<List<SessionInfo>> _future;
+  final Set<String> _collapsed = {};
 
   @override
   void initState() {
@@ -48,39 +49,98 @@ class _SessionsScreenState extends State<SessionsScreen> {
         _ => 'idle',
       };
 
-  Widget _sessionCard(SessionInfo s) {
-    return AppCard(
-      onTap: () => _open(s.id, s.title, s.profile),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(child: Text(s.title.isEmpty ? '(untitled)' : s.title, style: sans(14, weight: FontWeight.w500, height: 1.35, color: AppColors.fg1))),
-        const SizedBox(width: 10),
-        StatusPill(status: _pillStatus(s.status)),
-      ]),
+  // Build a folder tree from session workspace paths; conversations are leaves.
+  List<Widget> _tree(List<SessionInfo> sessions) {
+    final root = _Node('', '');
+    for (final s in sessions) {
+      final segs = s.folder.split('/').where((x) => x.isNotEmpty).toList();
+      var node = root;
+      var acc = '';
+      for (final seg in segs) {
+        acc = '$acc/$seg';
+        node = node.dirs.putIfAbsent(seg, () => _Node(seg, acc));
+      }
+      node.sessions.add(s);
+    }
+    final out = <Widget>[];
+    _render(root, 0, out);
+    return out;
+  }
+
+  int _count(_Node n) {
+    var c = n.sessions.length;
+    for (final d in n.dirs.values) {
+      c += _count(d);
+    }
+    return c;
+  }
+
+  void _render(_Node n, int depth, List<Widget> out) {
+    final dirs = n.dirs.values.toList()..sort((a, b) => a.name.compareTo(b.name));
+    for (var d in dirs) {
+      var label = d.name;
+      // collapse single-child chains (home/snippet/code) into one row
+      while (d.dirs.length == 1 && d.sessions.isEmpty) {
+        final only = d.dirs.values.first;
+        label = '$label/${only.name}';
+        d = only;
+      }
+      final expanded = !_collapsed.contains(d.path);
+      out.add(_folderRow(label, d.path, depth, expanded, _count(d)));
+      if (expanded) _render(d, depth + 1, out);
+    }
+    for (final s in n.sessions) {
+      out.add(_sessionRow(s, depth));
+    }
+  }
+
+  Widget _folderRow(String label, String path, int depth, bool expanded, int count) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(R.sm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(R.sm),
+        onTap: () => setState(() {
+          if (expanded) {
+            _collapsed.add(path);
+          } else {
+            _collapsed.remove(path);
+          }
+        }),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(12 + depth * 14.0, 9, 12, 9),
+          child: Row(children: [
+            AppIcon(expanded ? 'chevron-down' : 'chevron-right', size: 16, color: AppColors.fg4),
+            const SizedBox(width: 4),
+            const AppIcon('folder', size: 16, color: AppColors.accent),
+            const SizedBox(width: 8),
+            Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(12.5, color: AppColors.fg1))),
+            Text('$count', style: mono(11, color: AppColors.fg4)),
+          ]),
+        ),
+      ),
     );
   }
 
-  // Group conversations by their workspace folder, with a folder header each.
-  List<Widget> _grouped(List<SessionInfo> sessions) {
-    final groups = <String, List<SessionInfo>>{};
-    for (final s in sessions) {
-      (groups[s.folder] ??= []).add(s);
-    }
-    final out = <Widget>[];
-    groups.forEach((folder, items) {
-      out.add(Padding(
-        padding: const EdgeInsets.fromLTRB(2, 2, 2, 8),
-        child: Row(children: [
-          const AppIcon('folder', size: 13, color: AppColors.fg4),
-          const SizedBox(width: 7),
-          Expanded(child: Text(folder, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(11.5, color: AppColors.fg3))),
-        ]),
-      ));
-      for (final s in items) {
-        out.add(Padding(padding: const EdgeInsets.only(bottom: 10), child: _sessionCard(s)));
-      }
-      out.add(const SizedBox(height: 6));
-    });
-    return out;
+  Widget _sessionRow(SessionInfo s, int depth) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(R.sm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(R.sm),
+        onTap: () => _open(s.id, s.title, s.profile),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(12 + (depth + 1) * 14.0, 9, 12, 9),
+          child: Row(children: [
+            const AppIcon('layers', size: 14, color: AppColors.fg4),
+            const SizedBox(width: 8),
+            Expanded(child: Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(13.5, color: AppColors.fg1))),
+            const SizedBox(width: 8),
+            StatusPill(status: _pillStatus(s.status)),
+          ]),
+        ),
+      ),
+    );
   }
 
   @override
@@ -116,14 +176,14 @@ class _SessionsScreenState extends State<SessionsScreen> {
                   backgroundColor: AppColors.surface2,
                   onRefresh: () async => _refresh(),
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    padding: const EdgeInsets.fromLTRB(6, 10, 10, 16),
                     children: [
                       if (sessions.isEmpty)
                         const Padding(
                           padding: EdgeInsets.only(top: 8),
                           child: EmptyState(icon: 'terminal', title: 'No sessions yet', body: 'Open a folder to start a coding session on this machine.'),
                         ),
-                      ..._grouped(sessions),
+                      ..._tree(sessions),
                     ],
                   ),
                 );
@@ -139,4 +199,12 @@ class _SessionsScreenState extends State<SessionsScreen> {
       ),
     );
   }
+}
+
+class _Node {
+  final String name;
+  final String path;
+  final Map<String, _Node> dirs = {};
+  final List<SessionInfo> sessions = [];
+  _Node(this.name, this.path);
 }
