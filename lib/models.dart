@@ -51,13 +51,15 @@ class ServerConfig {
   final List<ModelProfile> profiles;
   final String? active;
   final bool manualApproval;
+  final String hostname;
 
   ServerConfig.fromJson(Map<String, dynamic> j)
       : profiles = ((j['profiles'] as List?) ?? const [])
             .map((e) => ModelProfile.fromJson(e as Map<String, dynamic>))
             .toList(),
         active = j['active'] as String?,
-        manualApproval = j['manual_approval'] == true;
+        manualApproval = j['manual_approval'] == true,
+        hostname = j['hostname'] as String? ?? '';
 }
 
 class SessionInfo {

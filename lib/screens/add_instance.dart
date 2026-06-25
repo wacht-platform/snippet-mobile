@@ -1,14 +1,16 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../api.dart';
 import '../models.dart';
 import '../theme.dart';
-import 'scan.dart';
 
-/// Add a daemon by scanning the serve QR or pasting the connection string: the
-/// public URL carrying the token (https://host/?token=...). Raw JSON also works.
+/// Add a daemon: the camera scanner opens by default; a bar at the bottom lets you
+/// paste the connection string (URL?token) instead. The instance name defaults to
+/// the machine's hostname (reported by the daemon). Returns the [Instance] via pop.
 class AddInstanceScreen extends StatefulWidget {
   const AddInstanceScreen({super.key});
 
@@ -17,15 +19,22 @@ class AddInstanceScreen extends StatefulWidget {
 }
 
 class _AddInstanceScreenState extends State<AddInstanceScreen> {
-  final _conn = TextEditingController();
-  final _name = TextEditingController();
+  final _paste = TextEditingController();
+  PermissionStatus? _perm;
   bool _busy = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    Permission.camera.request().then((s) {
+      if (mounted) setState(() => _perm = s);
+    });
+  }
+
+  @override
   void dispose() {
-    _conn.dispose();
-    _name.dispose();
+    _paste.dispose();
     super.dispose();
   }
 
@@ -48,38 +57,30 @@ class _AddInstanceScreenState extends State<AddInstanceScreen> {
     return null;
   }
 
-  Future<void> _scan() async {
-    final raw = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(builder: (_) => const ScanScreen()),
-    );
-    if (raw != null && raw.isNotEmpty) {
-      _conn.text = raw;
-      await _submit();
-    }
-  }
-
-  Future<void> _submit() async {
+  Future<void> _connect(String raw) async {
+    if (_busy) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final parsed = _parse(_conn.text);
+      final parsed = _parse(raw);
       if (parsed == null) throw 'That is not a valid connection string.';
       final (url, token) = parsed;
       final client = DaemonClient(url, token);
-      if (!await client.health()) {
-        throw 'Could not reach the daemon at $url.';
-      }
-      final name = _name.text.trim().isEmpty ? hostOf(url) : _name.text.trim();
+      // getConfig validates the token (401 if wrong) and reports the hostname.
+      final cfg = await client.getConfig();
+      final name = cfg.hostname.isNotEmpty ? cfg.hostname : hostOf(url);
       if (mounted) {
         Navigator.pop(context, Instance(name: name, url: url, token: token));
       }
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _error = 'Could not connect: $e';
+          _busy = false;
+        });
+      }
     }
   }
 
@@ -87,72 +88,159 @@ class _AddInstanceScreenState extends State<AddInstanceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Add instance')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+      body: Column(
+        children: [
+          Expanded(child: _scannerArea()),
+          _pasteBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _scannerArea() {
+    final perm = _perm;
+    if (perm == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (!perm.isGranted) {
+      return _CameraOff(
+        permanent: perm.isPermanentlyDenied || perm.isRestricted,
+        onAllow: () =>
+            Permission.camera.request().then((s) => setState(() => _perm = s)),
+      );
+    }
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        MobileScanner(
+          onDetect: (capture) {
+            final raw = capture.barcodes.isNotEmpty
+                ? capture.barcodes.first.rawValue
+                : null;
+            if (raw != null && raw.trim().isNotEmpty) _connect(raw);
+          },
+          errorBuilder: (context, error) => const _CameraOff(permanent: false),
+        ),
+        IgnorePointer(
+          child: Container(
+            width: 230,
+            height: 230,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.white, width: 3),
+              borderRadius: BorderRadius.circular(22),
+            ),
+          ),
+        ),
+        const Positioned(
+          bottom: 20,
+          child: _Hint('Point at the snippet serve QR'),
+        ),
+      ],
+    );
+  }
+
+  Widget _pasteBar() {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Run `snippet serve`, then scan its QR or paste the connection '
-              'string it prints.',
-              style: TextStyle(color: AppColors.muted, height: 1.4),
-            ),
-            const SizedBox(height: 22),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : _scan,
-              icon: const Icon(Icons.qr_code_scanner, color: AppColors.accent),
-              label: const Text('Scan QR'),
-            ),
-            const SizedBox(height: 22),
+            const Text('…or paste the connection string',
+                style: TextStyle(color: AppColors.muted, fontSize: 13)),
+            const SizedBox(height: 8),
             Row(
               children: [
-                const Expanded(child: Divider()),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('or paste',
-                      style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                Expanded(
+                  child: TextField(
+                    controller: _paste,
+                    autocorrect: false,
+                    enabled: !_busy,
+                    decoration: const InputDecoration(
+                      hintText: 'https://host/?token=...',
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                    onSubmitted: (v) => _connect(v),
+                  ),
                 ),
-                const Expanded(child: Divider()),
+                const SizedBox(width: 10),
+                SizedBox(
+                  height: 46,
+                  child: FilledButton(
+                    onPressed: _busy ? null : () => _connect(_paste.text),
+                    child: _busy
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Go'),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 22),
-            TextField(
-              controller: _conn,
-              maxLines: 3,
-              autocorrect: false,
-              decoration: const InputDecoration(
-                labelText: 'Connection string',
-                hintText: 'https://host/?token=...',
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _name,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _submit(),
-              decoration: const InputDecoration(
-                labelText: 'Name (optional)',
-                hintText: 'e.g. my laptop',
-              ),
-            ),
-            const SizedBox(height: 18),
             if (_error != null)
               Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.only(top: 10),
                 child: Text(_error!,
                     style: const TextStyle(color: AppColors.offline)),
               ),
-            FilledButton(
-              onPressed: _busy ? null : _submit,
-              child: _busy
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Connect'),
-            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _Hint extends StatelessWidget {
+  final String text;
+  const _Hint(this.text);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(text, style: const TextStyle(color: Colors.white)),
+    );
+  }
+}
+
+class _CameraOff extends StatelessWidget {
+  final bool permanent;
+  final VoidCallback? onAllow;
+  const _CameraOff({required this.permanent, this.onAllow});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.no_photography_outlined,
+              color: AppColors.muted, size: 44),
+          const SizedBox(height: 14),
+          const Text('Camera off — paste the connection string below',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.muted)),
+          if (onAllow != null) ...[
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: permanent ? openAppSettings : onAllow,
+              child: Text(permanent ? 'Open settings' : 'Allow camera'),
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 import '../api.dart';
 import '../models.dart';
@@ -8,7 +7,8 @@ import '../theme.dart';
 import 'add_instance.dart';
 import 'sessions.dart';
 
-/// Home screen: all connected daemon instances. Pick one to manage its sessions.
+/// Home screen: connected daemon instances as reorderable cards, plus an always-
+/// present "Add instance" card (which doubles as the empty state).
 class InstancesScreen extends StatefulWidget {
   const InstancesScreen({super.key});
 
@@ -43,7 +43,32 @@ class _InstancesScreenState extends State<InstancesScreen> {
     if (mounted) setState(() => _instances = items);
   }
 
-  Future<void> _remove(Instance inst) async {
+  Future<void> _reorder(int oldIndex, int newIndex) async {
+    final items = [...?_instances];
+    final it = items.removeAt(oldIndex);
+    items.insert(newIndex, it);
+    await _store.save(items);
+    if (mounted) setState(() => _instances = items);
+  }
+
+  Future<void> _confirmDelete(Instance inst) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surfaceAlt,
+        title: const Text('Remove instance?'),
+        content: Text(inst.label),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (ok != true) return;
     final items = [...?_instances]
       ..removeWhere((e) => e.url == inst.url && e.token == inst.token);
     await _store.save(items);
@@ -66,150 +91,148 @@ class _InstancesScreenState extends State<InstancesScreen> {
   Widget build(BuildContext context) {
     final instances = _instances;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Instances'),
-        bottom: const _AppBarSubtitle('Your snippet daemons'),
-      ),
-      floatingActionButton: (instances != null && instances.isNotEmpty)
-          ? GradientButton(
-              icon: Icons.add,
-              label: 'Add',
-              onTap: _add,
-              compact: true,
-            )
-          : null,
+      appBar: AppBar(title: const Text('Instances')),
       body: instances == null
           ? const Center(child: CircularProgressIndicator())
-          : instances.isEmpty
-              ? _Empty(onAdd: _add)
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                  itemCount: instances.length,
-                  itemBuilder: (_, i) {
-                    final inst = instances[i];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Dismissible(
-                        key: ValueKey('${inst.url}|${inst.token}'),
-                        direction: DismissDirection.endToStart,
-                        background: _DismissBg(),
-                        onDismissed: (_) => _remove(inst),
-                        child: GlassCard(
-                          onTap: () => _open(inst),
-                          child: Row(
-                            children: [
-                              _StatusDot(
-                                  client: DaemonClient(inst.url, inst.token)),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      inst.label,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      hostOf(inst.url),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                          color: AppColors.muted, fontSize: 13),
-                                    ),
-                                  ],
-                                ),
+          : Column(
+              children: [
+                Expanded(
+                  child: instances.isEmpty
+                      ? ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 56, 16, 0),
+                          children: [
+                            const Text('No instances yet',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Run `snippet serve` and add it.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: AppColors.muted),
+                            ),
+                            const SizedBox(height: 24),
+                            _AddCard(onTap: _add),
+                          ],
+                        )
+                      : ReorderableListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                          buildDefaultDragHandles: false,
+                          itemCount: instances.length,
+                          onReorderItem: _reorder,
+                          itemBuilder: (_, i) {
+                            final inst = instances[i];
+                            return Padding(
+                              key: ValueKey('${inst.url}|${inst.token}'),
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _InstanceCard(
+                                instance: inst,
+                                index: i,
+                                onOpen: () => _open(inst),
+                                onDelete: () => _confirmDelete(inst),
                               ),
-                              const Icon(Icons.chevron_right,
-                                  color: AppColors.muted),
-                            ],
-                          ),
+                            );
+                          },
                         ),
-                      ),
-                    )
-                        .animate()
-                        .fadeIn(duration: 280.ms, delay: (40 * i).ms)
-                        .slideY(begin: 0.08, curve: Curves.easeOut);
-                  },
                 ),
+                if (instances.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: _AddCard(onTap: _add),
+                  ),
+              ],
+            ),
     );
   }
 }
 
-class _AppBarSubtitle extends StatelessWidget implements PreferredSizeWidget {
-  final String text;
-  const _AppBarSubtitle(this.text);
-  @override
-  Size get preferredSize => const Size.fromHeight(22);
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.only(left: 16, bottom: 8),
-      child: Text(text,
-          style: const TextStyle(color: AppColors.muted, fontSize: 13)),
-    );
-  }
-}
-
-class _DismissBg extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.offline.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      alignment: Alignment.centerRight,
-      padding: const EdgeInsets.only(right: 22),
-      child: const Icon(Icons.delete_outline, color: AppColors.offline),
-    );
-  }
-}
-
-class _Empty extends StatelessWidget {
-  final VoidCallback onAdd;
-  const _Empty({required this.onAdd});
+class _AddCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 22),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+              color: AppColors.accent.withValues(alpha: 0.55), width: 1.4),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [
-                  AppColors.accent.withValues(alpha: 0.18),
-                  AppColors.accent2.withValues(alpha: 0.18),
-                ]),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.dns_outlined,
-                  size: 40, color: AppColors.accent),
-            ),
-            const SizedBox(height: 20),
-            const Text('No instances yet',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            const Text(
-              'Run `snippet serve` and add the connection string it prints.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.muted),
-            ),
-            const SizedBox(height: 24),
-            GradientButton(icon: Icons.add, label: 'Add instance', onTap: onAdd),
+            Icon(Icons.add, color: AppColors.accent),
+            SizedBox(width: 8),
+            Text('Add instance',
+                style: TextStyle(
+                    color: AppColors.accent,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15)),
           ],
         ),
-      ).animate().fadeIn(duration: 400.ms),
+      ),
+    );
+  }
+}
+
+class _InstanceCard extends StatelessWidget {
+  final Instance instance;
+  final int index;
+  final VoidCallback onOpen;
+  final VoidCallback onDelete;
+  const _InstanceCard({
+    required this.instance,
+    required this.index,
+    required this.onOpen,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      onTap: onOpen,
+      padding: const EdgeInsets.fromLTRB(14, 14, 6, 14),
+      child: Row(
+        children: [
+          _StatusDot(client: DaemonClient(instance.url, instance.token)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(instance.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(hostOf(instance.url),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        const TextStyle(color: AppColors.muted, fontSize: 13)),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: AppColors.muted),
+            onPressed: onDelete,
+            tooltip: 'Remove',
+          ),
+          ReorderableDragStartListener(
+            index: index,
+            child: const Padding(
+              padding: EdgeInsets.only(left: 2, right: 8),
+              child: Icon(Icons.drag_handle, color: AppColors.muted),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

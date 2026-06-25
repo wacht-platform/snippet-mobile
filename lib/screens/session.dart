@@ -471,7 +471,7 @@ class _SessionScreenState extends State<SessionScreen> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  gradient: AppColors.accentGradient,
+                  color: AppColors.accent,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(Icons.arrow_upward,
