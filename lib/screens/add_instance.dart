@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_zxing/flutter_zxing.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:qr_code_dart_scan/qr_code_dart_scan.dart';
 
 import '../api.dart';
 import '../models.dart';
@@ -123,27 +123,23 @@ class _AddInstanceScreenState extends State<AddInstanceScreen>
       );
     }
     return Stack(
-      alignment: Alignment.center,
+      alignment: Alignment.bottomCenter,
       children: [
-        QRCodeDartScanView(
-          typeScan: TypeScan.live,
-          onCapture: (result) {
-            final raw = result.text;
-            if (raw.trim().isNotEmpty) _connect(raw);
+        ReaderWidget(
+          onScan: (code) {
+            final raw = code.text;
+            if (code.isValid && raw != null && raw.trim().isNotEmpty) {
+              _connect(raw);
+            }
           },
+          tryHarder: true,
+          tryInverted: true,
+          showGallery: false,
+          cropPercent: 0.7,
+          scanDelay: const Duration(milliseconds: 300),
         ),
-        IgnorePointer(
-          child: Container(
-            width: 230,
-            height: 230,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.white, width: 3),
-              borderRadius: BorderRadius.circular(22),
-            ),
-          ),
-        ),
-        const Positioned(
-          bottom: 20,
+        const Padding(
+          padding: EdgeInsets.only(bottom: 28),
           child: _Hint('Point at the snippet serve QR'),
         ),
       ],
