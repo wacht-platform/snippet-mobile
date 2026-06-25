@@ -5,6 +5,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../api.dart';
 import '../models.dart';
+import '../notifications.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
@@ -28,6 +29,7 @@ class _SessionScreenState extends State<SessionScreen> {
   void initState() {
     super.initState();
     _connect();
+    reportOpenSession('${widget.client.baseUrl}|${widget.sessionId}');
   }
 
   void _connect() {
@@ -40,7 +42,9 @@ class _SessionScreenState extends State<SessionScreen> {
         try {
           final j = jsonDecode(msg as String) as Map<String, dynamic>;
           if (!mounted) return;
-          setState(() => _state = HarnessState.fromJson(j));
+          final cur = _state;
+          final next = (j['wire'] == 'delta' && cur != null) ? cur.applyDelta(j) : HarnessState.fromJson(j);
+          setState(() => _state = next);
           WidgetsBinding.instance.addPostFrameCallback((_) => _toBottom());
         } catch (_) {}
       },
@@ -71,6 +75,7 @@ class _SessionScreenState extends State<SessionScreen> {
 
   @override
   void dispose() {
+    reportOpenSession('');
     _channel?.sink.close();
     _input.dispose();
     _scroll.dispose();

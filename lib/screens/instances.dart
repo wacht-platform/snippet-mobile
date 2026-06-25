@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../models.dart';
+import '../notifications.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets.dart';
@@ -65,6 +66,36 @@ class _InstancesScreenState extends State<InstancesScreen> {
                 client: DaemonClient(inst.url, inst.token), instance: inst)));
   }
 
+  void _showSettings() {
+    showAppSheet(context, title: 'Settings', child: StatefulBuilder(
+      builder: (ctx, setSheet) => FutureBuilder<bool>(
+        future: notificationsEnabled(),
+        builder: (_, snap) {
+          final on = snap.data ?? false;
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            AppToggle(
+              on: on,
+              label: 'Background notifications',
+              sub: 'Get pinged when a session needs you, even with the app in the background.',
+              onChanged: (v) async {
+                final err = await setNotificationsEnabled(v);
+                if (err != null && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                }
+                setSheet(() {});
+              },
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Keeps a lightweight watcher running with a persistent notification. On Android 15 background watching may pause after a few hours until you reopen the app, and it cannot notify after you force-stop the app.',
+              style: sans(11.5, height: 1.45, color: AppColors.fg3),
+            ),
+          ]);
+        },
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final instances = _instances;
@@ -74,6 +105,7 @@ class _InstancesScreenState extends State<InstancesScreen> {
         bottom: false,
         child: Column(children: [
           SnAppBar(title: 'Instances', actions: [
+            IconBtn('settings', onTap: _showSettings),
             if (instances != null && !empty)
               GestureDetector(
                 onTap: () => setState(() => _edit = !_edit),

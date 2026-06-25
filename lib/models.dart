@@ -196,6 +196,33 @@ class HarnessState {
           .toList(),
     );
   }
+
+  /// Merge a delta frame: scalars come from `d`; events are the existing log
+  /// plus the appended `new_events`.
+  HarnessState applyDelta(Map<String, dynamic> d) {
+    final base = HarnessState.fromJson(d); // scalars; events empty (delta omits them)
+    final added = ((d['new_events'] as List?) ?? const [])
+        .map((e) => (e as Map).cast<String, dynamic>())
+        .toList();
+    return HarnessState(
+      status: base.status,
+      workspace: base.workspace,
+      userRequest: base.userRequest,
+      events: [...events, ...added],
+      finalText: base.finalText,
+      approvalMode: base.approvalMode,
+      pendingQuestion: base.pendingQuestion,
+      totalTokens: base.totalTokens,
+      promptTokens: base.promptTokens,
+      completionTokens: base.completionTokens,
+      cacheReadTokens: base.cacheReadTokens,
+      lastPromptTokens: base.lastPromptTokens,
+      contextWindow: base.contextWindow,
+      ratePrimary: base.ratePrimary,
+      rateSecondary: base.rateSecondary,
+      checkpoints: base.checkpoints,
+    );
+  }
 }
 
 /// Human label for a rate-limit window length (mirrors the TUI).
