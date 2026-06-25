@@ -97,7 +97,7 @@ class _SessionScreenState extends State<SessionScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: Column(children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           SnAppBar(
             title: widget.title.isEmpty ? 'session' : widget.title,
             subtitle: s != null && s.workspace.isNotEmpty ? s.workspace : null,

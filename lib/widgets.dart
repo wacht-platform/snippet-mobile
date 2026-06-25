@@ -1,6 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'theme.dart';
+
+/// Themed markdown stylesheet for agent messages.
+MarkdownStyleSheet markdownStyle(BuildContext context) {
+  return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+    p: sans(13.5, height: 1.5, color: AppColors.fg1),
+    pPadding: EdgeInsets.zero,
+    a: sans(13.5, height: 1.5, color: AppColors.accent),
+    h1: sans(18, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1),
+    h1Padding: const EdgeInsets.only(top: 6, bottom: 2),
+    h2: sans(16, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1),
+    h3: sans(14.5, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1),
+    code: mono(12, color: AppColors.fg1).copyWith(backgroundColor: AppColors.surface2),
+    codeblockPadding: const EdgeInsets.all(12),
+    codeblockDecoration: BoxDecoration(
+      color: AppColors.surface2,
+      border: Border.all(color: AppColors.border),
+      borderRadius: BorderRadius.circular(R.sm),
+    ),
+    blockquote: sans(13.5, height: 1.5, color: AppColors.fg2),
+    blockquoteDecoration: BoxDecoration(
+      color: AppColors.surface2,
+      borderRadius: BorderRadius.circular(R.xs),
+      border: const Border(left: BorderSide(color: AppColors.accentLine, width: 3)),
+    ),
+    listBullet: sans(13.5, height: 1.5, color: AppColors.fg1),
+    tableBody: sans(12.5, color: AppColors.fg1),
+    horizontalRuleDecoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+  );
+}
 
 /// Line icon (Material outlined, mapped from the handoff's Lucide names).
 class AppIcon extends StatelessWidget {
@@ -283,7 +313,9 @@ class Bubble extends StatelessWidget {
             bottomLeft: Radius.circular(mine ? 16 : 5),
           ),
         ),
-        child: SelectableText(text, style: sans(13.5, height: 1.5, color: AppColors.fg1)),
+        child: mine
+            ? SelectableText(text, style: sans(13.5, height: 1.5, color: AppColors.fg1))
+            : MarkdownBody(data: text, selectable: true, styleSheet: markdownStyle(context)),
       ),
     );
   }
