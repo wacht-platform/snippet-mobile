@@ -28,6 +28,38 @@ String hostOf(String url) {
   }
 }
 
+/// A configured model profile (from GET /config). Keys are never sent back — only
+/// [hasKey] tells whether one is set.
+class ModelProfile {
+  final String name;
+  final String provider;
+  final String baseUrl;
+  final String model;
+  final bool hasKey;
+  final bool active;
+
+  ModelProfile.fromJson(Map<String, dynamic> j)
+      : name = j['name'] as String? ?? '',
+        provider = j['provider'] as String? ?? '',
+        baseUrl = j['base_url'] as String? ?? '',
+        model = j['model'] as String? ?? '',
+        hasKey = j['has_key'] == true,
+        active = j['active'] == true;
+}
+
+class ServerConfig {
+  final List<ModelProfile> profiles;
+  final String? active;
+  final bool manualApproval;
+
+  ServerConfig.fromJson(Map<String, dynamic> j)
+      : profiles = ((j['profiles'] as List?) ?? const [])
+            .map((e) => ModelProfile.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        active = j['active'] as String?,
+        manualApproval = j['manual_approval'] == true;
+}
+
 class SessionInfo {
   final String id;
   final String folder;

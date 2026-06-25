@@ -5,6 +5,7 @@ import '../api.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'folder_browser.dart';
+import 'models.dart';
 import 'session.dart';
 
 /// Sessions for one instance: attach to an existing one, or open a new folder.
@@ -59,6 +60,15 @@ class _SessionsScreenState extends State<SessionsScreen> {
       appBar: AppBar(
         title: Text(widget.instanceName, overflow: TextOverflow.ellipsis),
         actions: [
+          IconButton(
+            tooltip: 'Models',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => ModelsScreen(client: widget.client)),
+            ),
+            icon: const Icon(Icons.tune),
+          ),
           IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
       ),

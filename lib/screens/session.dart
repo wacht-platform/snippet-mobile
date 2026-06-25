@@ -80,6 +80,64 @@ class _SessionScreenState extends State<SessionScreen> {
     _input.clear();
   }
 
+  void _toast(String m) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+    }
+  }
+
+  /// Per-conversation model switch: pick a profile, ask the daemon to rebuild this
+  /// session's loop on it, then reconnect to the new loop.
+  Future<void> _switchModel() async {
+    final ServerConfig cfg;
+    try {
+      cfg = await widget.client.getConfig();
+    } catch (e) {
+      _toast('$e');
+      return;
+    }
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Switch model for this conversation',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              ),
+            ),
+            ...cfg.profiles.map((p) => ListTile(
+                  leading: const Icon(Icons.bolt, color: AppColors.accent),
+                  title: Text(p.name),
+                  subtitle: Text('${p.provider} · ${p.model}',
+                      style: const TextStyle(color: AppColors.muted)),
+                  onTap: () => Navigator.pop(context, p.name),
+                )),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    try {
+      await widget.client.setSessionModel(widget.sessionId, picked);
+      _toast('Switched to $picked');
+      if (mounted) setState(_connect); // reconnect to the rebuilt session loop
+    } catch (e) {
+      _toast('$e');
+    }
+  }
+
   @override
   void dispose() {
     _channel?.sink.close();
@@ -142,6 +200,34 @@ class _SessionScreenState extends State<SessionScreen> {
               onPressed: () => _send({'kind': 'interrupt'}),
               icon: const Icon(Icons.stop_circle_outlined),
             ),
+          PopupMenuButton<String>(
+            color: AppColors.surfaceAlt,
+            icon: const Icon(Icons.more_vert),
+            onSelected: (v) {
+              switch (v) {
+                case 'model':
+                  _switchModel();
+                case 'compact':
+                  _send({'kind': 'compact'});
+                  _toast('Compacting history…');
+                case 'mode':
+                  final manual = (state?.approvalMode ?? 'auto') == 'manual';
+                  _send({'kind': 'set_mode', 'value': manual ? 'auto' : 'manual'});
+                  _toast(manual ? 'Approval: auto' : 'Approval: manual');
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'model', child: Text('Switch model')),
+              const PopupMenuItem(
+                  value: 'compact', child: Text('Compact history')),
+              PopupMenuItem(
+                value: 'mode',
+                child: Text((state?.approvalMode ?? 'auto') == 'manual'
+                    ? 'Approval: manual ✓'
+                    : 'Approval: auto'),
+              ),
+            ],
+          ),
         ],
       ),
       body: Column(
