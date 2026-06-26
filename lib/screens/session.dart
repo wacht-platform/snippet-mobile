@@ -201,7 +201,8 @@ class _SessionScreenState extends State<SessionScreen> {
                         const SizedBox(height: 12),
                         for (final q in _queued) _QueuedBubble(text: q, onCancel: _cancelQueued),
                       ],
-                      if (waiting && _pendingApproval(events)) ...[const SizedBox(height: 12), _ApprovalBar(onSend: _send)],
+                      if (waiting && _pendingApproval(events)) ...[const SizedBox(height: 12), _ApprovalBar(onSend: _send)]
+                      else if (waiting && s.pendingQuestion != null) ...[const SizedBox(height: 12), _QuestionBar(question: s.pendingQuestion!, onSend: _send)],
                     ],
                   ),
           ),
@@ -402,6 +403,12 @@ class _SessionScreenState extends State<SessionScreen> {
         case 'lane_completed':
           flush();
           out.add(NoteLine('lane done: ${_s(e['title'])}'));
+        case 'user_question':
+          flush();
+          final qd = e['questions'];
+          final qs = (qd is Map ? qd['questions'] : null) as List?;
+          final txt = (qs != null && qs.isNotEmpty && qs.first is Map) ? _s((qs.first as Map)['text']) : '';
+          if (txt.isNotEmpty) out.add(Padding(padding: const EdgeInsets.only(bottom: 12), child: Bubble(mine: false, text: '❓ $txt')));
         case 'approval_request':
           break; // shown by the approval bar
         default:
@@ -766,6 +773,122 @@ class _ApprovalBar extends StatelessWidget {
           const SizedBox(width: 8),
           Btn('Deny', small: true, variant: BtnVariant.ghost, onTap: () => onSend({'kind': 'deny'})),
         ]),
+      ]),
+    );
+  }
+}
+
+/// Renders an `ask_user` pending question (status waiting_for_input) and sends the
+/// answer back as a LoopInput::Answer. Handles free_text / single_choice / yes_no /
+/// confirm answer kinds.
+class _QuestionBar extends StatefulWidget {
+  final Map<String, dynamic> question; // {questions:[...], context}
+  final void Function(Map<String, dynamic>) onSend;
+  const _QuestionBar({required this.question, required this.onSend});
+  @override
+  State<_QuestionBar> createState() => _QuestionBarState();
+}
+
+class _QuestionBarState extends State<_QuestionBar> {
+  final Map<String, TextEditingController> _text = {};
+  final Map<String, String> _choice = {};
+
+  List<Map<String, dynamic>> get _questions =>
+      ((widget.question['questions'] as List?) ?? const []).cast<Map<String, dynamic>>();
+
+  String _kind(Map<String, dynamic> q) =>
+      (q['answer_kind'] is Map ? q['answer_kind']['kind'] : null)?.toString() ?? 'free_text';
+
+  @override
+  void dispose() {
+    for (final c in _text.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  bool get _ready => _questions.every((q) {
+        final id = q['id'].toString();
+        return _kind(q) == 'free_text'
+            ? (_text[id]?.text.trim().isNotEmpty ?? false)
+            : (_choice[id]?.isNotEmpty ?? false);
+      });
+
+  void _submit() {
+    if (!_ready) return;
+    final multi = _questions.length > 1;
+    final parts = _questions.map((q) {
+      final id = q['id'].toString();
+      final a = _kind(q) == 'free_text' ? (_text[id]?.text.trim() ?? '') : (_choice[id] ?? '');
+      return multi ? '${q['text']}\n→ $a' : a;
+    }).toList();
+    widget.onSend({'kind': 'answer', 'value': parts.join('\n\n')});
+  }
+
+  Widget _chip(String label, bool sel, VoidCallback onTap) => Material(
+        color: sel ? AppColors.accent : AppColors.surface2,
+        borderRadius: BorderRadius.circular(99),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(99),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Text(label, style: sans(12.5, weight: FontWeight.w500, color: sel ? AppColors.accentFg : AppColors.fg1)),
+          ),
+        ),
+      );
+
+  List<Widget> _inputFor(Map<String, dynamic> q) {
+    final id = q['id'].toString();
+    final k = _kind(q);
+    if (k == 'yes_no' || k == 'confirm') {
+      final opts = k == 'confirm' ? const ['Confirm', 'Cancel'] : const ['Yes', 'No'];
+      final vals = k == 'confirm' ? const ['confirm', 'cancel'] : const ['yes', 'no'];
+      return [
+        Wrap(spacing: 8, children: [
+          for (var i = 0; i < opts.length; i++)
+            _chip(opts[i], _choice[id] == vals[i], () => setState(() => _choice[id] = vals[i])),
+        ]),
+      ];
+    }
+    if (k == 'single_choice') {
+      final choices = ((q['answer_kind']?['choices'] as List?) ?? const []).map((e) => e.toString()).toList();
+      return [
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final c in choices) _chip(c, _choice[id] == c, () => setState(() => _choice[id] = c)),
+        ]),
+      ];
+    }
+    _text.putIfAbsent(id, () => TextEditingController());
+    return [
+      AppField(controller: _text[id]!, hint: 'Your answer', maxLines: 4, onSubmitted: (_) => _submit()),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ctx = widget.question['context']?.toString();
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(color: AppColors.accentBg, border: Border.all(color: AppColors.accentLine), borderRadius: BorderRadius.circular(14)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Padding(padding: EdgeInsets.only(top: 1), child: AppIcon('alert-triangle', size: 16, color: AppColors.accent)),
+          const SizedBox(width: 9),
+          Expanded(child: Text('The agent needs your input', style: sans(13, weight: FontWeight.w600, color: AppColors.fg1))),
+        ]),
+        if (ctx != null && ctx.isNotEmpty && ctx != 'null') ...[
+          const SizedBox(height: 8),
+          Text(ctx, style: sans(12.5, height: 1.4, color: AppColors.fg2)),
+        ],
+        for (final q in _questions) ...[
+          const SizedBox(height: 12),
+          Text(q['text']?.toString() ?? '', style: sans(13, weight: FontWeight.w500, height: 1.35, color: AppColors.fg1)),
+          const SizedBox(height: 8),
+          ..._inputFor(q),
+        ],
+        const SizedBox(height: 12),
+        Btn('Send answer', small: true, icon: 'send', full: true, disabled: !_ready, onTap: _ready ? _submit : null),
       ]),
     );
   }
