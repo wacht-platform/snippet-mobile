@@ -365,6 +365,10 @@ class _SessionScreenState extends State<SessionScreen> {
       switch (k) {
         case 'tool_call':
           flush();
+          // Meta-tools render via their own events (note → note, ask_user →
+          // user_question, delegate_task → lane_spawned). Skip their generic tool
+          // lines so they don't double up or open a raw-JSON drawer.
+          if (_isMetaTool(_s(e['tool_name']))) break;
           pending = e;
         case 'tool_result':
           {
@@ -375,6 +379,7 @@ class _SessionScreenState extends State<SessionScreen> {
               pending = null;
             } else {
               final name = _s(e['tool_name']);
+              if (_isMetaTool(name)) break;
               out.add(ToolLine(tool: name, icon: toolIcon(name), out: _resultStatus(e['result']), done: _ok(e['result']), onTap: () => _showToolDetail(name, null, e['result'])));
             }
           }
@@ -393,7 +398,8 @@ class _SessionScreenState extends State<SessionScreen> {
           out.add(NoteLine('invalid ${_s(e['tool_name'])}: ${_s(e['error'])}', error: true));
         case 'note':
           flush();
-          out.add(NoteLine(_s(e['entry'])));
+          final entry = _s(e['entry']);
+          out.add(_NoteLine(entry, onTap: () => _showNote(entry)));
         case 'system_decision':
           flush();
           out.add(NoteLine(_s(e['reasoning'])));
@@ -420,6 +426,13 @@ class _SessionScreenState extends State<SessionScreen> {
   }
 
   String _s(dynamic v) => v?.toString() ?? '';
+
+  // Meta-tools have dedicated event rendering, so their generic tool lines are skipped.
+  bool _isMetaTool(String n) => n == 'note' || n == 'ask_user' || n == 'delegate_task';
+
+  void _showNote(String text) {
+    showAppSheet(context, title: 'Note', child: SelectableText(text, style: sans(13.5, height: 1.5, color: AppColors.fg1)));
+  }
 
   // Short result tag shown on the inline line: exit code for bash, else status.
   String _resultStatus(dynamic r) {
@@ -774,6 +787,42 @@ class _ApprovalBar extends StatelessWidget {
           Btn('Deny', small: true, variant: BtnVariant.ghost, onTap: () => onSend({'kind': 'deny'})),
         ]),
       ]),
+    );
+  }
+}
+
+/// An agent note: a clean, left-aligned, readable line (preview up to 4 lines)
+/// that opens the full note in a sheet on tap — not a raw-JSON tool drawer.
+class _NoteLine extends StatelessWidget {
+  final String text;
+  final VoidCallback onTap;
+  const _NoteLine(this.text, {required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(R.sm),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(R.sm),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+            decoration: BoxDecoration(
+              color: AppColors.surface1,
+              borderRadius: BorderRadius.circular(R.sm),
+              border: const Border(left: BorderSide(color: AppColors.border2, width: 2)),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Padding(padding: EdgeInsets.only(top: 1.5), child: AppIcon('edit', size: 12, color: AppColors.fg4)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(text, maxLines: 4, overflow: TextOverflow.ellipsis, style: sans(12.5, height: 1.45, color: AppColors.fg2))),
+              const Padding(padding: EdgeInsets.only(left: 4, top: 1), child: AppIcon('chevron-right', size: 14, color: AppColors.fg4)),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 }
