@@ -39,6 +39,7 @@ class _SessionScreenState extends State<SessionScreen> {
   String? _localImagePath;
   String? _pendingImagePath;
   bool _uploading = false;
+  bool _didInitialScroll = false;
 
   @override
   void initState() {
@@ -90,11 +91,23 @@ class _SessionScreenState extends State<SessionScreen> {
           if (!mounted) return;
           final cur = _state;
           final next = (j['wire'] == 'delta' && cur != null) ? cur.applyDelta(j) : HarnessState.fromJson(j);
+          final firstLoad = !_didInitialScroll && next.events.isNotEmpty;
           setState(() {
             _state = next;
             _reconcileQueued(next.events);
           });
-          WidgetsBinding.instance.addPostFrameCallback((_) => _toBottom());
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (firstLoad) {
+              _didInitialScroll = true;
+              // Jump to the bottom on open; re-jump to catch late layout growth
+              // (markdown/code blocks measure after the first frame).
+              _toBottom(jump: true);
+              Future.delayed(const Duration(milliseconds: 120), () { if (mounted) _toBottom(jump: true); });
+              Future.delayed(const Duration(milliseconds: 350), () { if (mounted) _toBottom(jump: true); });
+            } else {
+              _toBottom();
+            }
+          });
         } catch (_) {}
       },
       onError: (e) => mounted ? setState(() => _connError = '$e') : null,
@@ -102,9 +115,13 @@ class _SessionScreenState extends State<SessionScreen> {
     );
   }
 
-  void _toBottom() {
-    if (_scroll.hasClients) {
-      _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+  void _toBottom({bool jump = false}) {
+    if (!_scroll.hasClients) return;
+    final target = _scroll.position.maxScrollExtent;
+    if (jump) {
+      _scroll.jumpTo(target);
+    } else {
+      _scroll.animateTo(target, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
     }
   }
 
