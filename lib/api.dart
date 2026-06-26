@@ -49,6 +49,12 @@ class DaemonClient {
     return FsListing.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
   }
 
+  Future<FileContent> readFile(String path) async {
+    final r = await http.get(_uri('/fs/file', {'path': path}));
+    if (r.statusCode != 200) throw _err('read file', r);
+    return FileContent.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
+  }
+
   Future<String> openSession(String folder,
       {bool resume = true, String? profile}) async {
     final body = <String, dynamic>{'folder': folder, 'resume': resume};

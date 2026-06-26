@@ -4,6 +4,7 @@ import '../api.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'files.dart';
 import 'folder_browser.dart';
 import 'models.dart';
 import 'session.dart';
@@ -155,6 +156,9 @@ class _SessionsScreenState extends State<SessionsScreen> {
             onBack: () => Navigator.pop(context),
             actions: [
               IconBtn('refresh', onTap: _refresh),
+              IconBtn('folder', tooltip: 'Browse files', onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => FileExplorer(client: widget.client, title: widget.instance.label)));
+              }),
               IconBtn('cpu', tooltip: 'Models', onTap: () {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => ModelsScreen(client: widget.client)));
               }),

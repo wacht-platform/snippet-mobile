@@ -1,0 +1,939 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+
+import 'theme.dart';
+import 'widgets.dart';
+
+// Per-tool rendering: a glyph + one-line summary for the inline ToolLine, and a
+// rich, tool-specific body for the detail drawer (never raw JSON unless unknown).
+
+/// Lucide-ish glyph name for a tool (resolved via [iconFor]).
+String toolIcon(String tool) => switch (tool) {
+      'edit_file' || 'replace_file_content' => 'edit',
+      'write_file' || 'append_file' => 'file-plus',
+      'read_file' => 'file',
+      'read_image' => 'image',
+      'bash' => 'terminal',
+      'search_content' || 'search_files' => 'search',
+      'list_files' => 'folder-open',
+      'code_map' || 'view_outline' => 'map',
+      'web_search' || 'web_read' => 'globe',
+      _ => 'zap',
+    };
+
+/// One-line, tool-aware summary for the inline activity line.
+String toolArgSummary(String tool, dynamic args) {
+  if (args is! Map) return '';
+  String s(String k) => args[k]?.toString() ?? '';
+  String first(String v) => v.split('\n').first.trim();
+  final v = switch (tool) {
+    'bash' => s('command'),
+    'search_content' || 'web_search' => s('query'),
+    'search_files' => s('pattern'),
+    'web_read' => s('url'),
+    'code_map' => args['path']?.toString() ?? args['query']?.toString() ?? '.',
+    'read_file' ||
+    'write_file' ||
+    'append_file' ||
+    'read_image' ||
+    'edit_file' ||
+    'replace_file_content' ||
+    'view_outline' ||
+    'list_files' =>
+      s('path'),
+    _ => '',
+  };
+  if (v.isNotEmpty) return first(v);
+  for (final k in const ['command', 'path', 'query', 'pattern', 'url', 'file']) {
+    if (args[k] is String) return first(args[k] as String);
+  }
+  return '';
+}
+
+/// Friendly title for the drawer header.
+String toolTitle(String tool) => switch (tool) {
+      'edit_file' => 'Edit file',
+      'replace_file_content' => 'Replace lines',
+      'write_file' => 'Write file',
+      'append_file' => 'Append file',
+      'read_file' => 'Read file',
+      'read_image' => 'Read image',
+      'bash' => 'Shell command',
+      'search_content' => 'Search content',
+      'search_files' => 'Find files',
+      'list_files' => 'List files',
+      'code_map' => 'Code map',
+      'view_outline' => 'File outline',
+      'web_search' => 'Web search',
+      'web_read' => 'Read page',
+      _ => tool,
+    };
+
+/// The drawer body for a tool. [result] is the full ToolResult map
+/// ({status, data, error}); null while the call is still pending.
+Widget toolDetailView(BuildContext context,
+    {required String tool, dynamic args, dynamic result}) {
+  final Map? a = args is Map ? args : null;
+  final Map? r = result is Map ? result : null;
+  final status = r?['status']?.toString();
+  final data = r?['data'];
+  final Map? d = data is Map ? data : null;
+  final err = r?['error'];
+  final errMsg = err is Map ? err['message']?.toString() : null;
+
+  final rows = <Widget>[];
+
+  // Error banner first — applies to every tool.
+  if (status == 'error' && errMsg != null) {
+    rows.add(_ErrorBox(errMsg));
+    rows.add(const SizedBox(height: 14));
+  }
+
+  // Spilled / oversized output (generic wrapper the harness may apply).
+  if (d != null && (d['data_omitted'] == true || d['truncated'] == true && d['preview'] != null)) {
+    final body = _toolBody(context, tool, a, d, status);
+    rows.addAll(body);
+    if (d['preview'] != null) {
+      rows.add(const SizedBox(height: 14));
+      rows.add(const SectionLabel('Preview'));
+      rows.add(const SizedBox(height: 8));
+      rows.add(_CodeBox(d['preview'].toString()));
+    }
+    if (d['hint'] != null) {
+      rows.add(const SizedBox(height: 10));
+      rows.add(_Hint(d['hint'].toString()));
+    }
+    return _wrap(rows);
+  }
+
+  rows.addAll(_toolBody(context, tool, a, d, status));
+
+  if (rows.isEmpty) {
+    rows.add(Text('No details.', style: sans(12.5, color: AppColors.fg3)));
+  }
+  return _wrap(rows);
+}
+
+Widget _wrap(List<Widget> rows) =>
+    Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows);
+
+List<Widget> _toolBody(BuildContext context, String tool, Map? a, Map? d, String? status) {
+  switch (tool) {
+    case 'edit_file':
+      return _editView(a, d, oldKey: 'old_string', newKey: 'new_string');
+    case 'replace_file_content':
+      return _editView(a, d,
+          oldKey: 'target_content',
+          newKey: 'replacement_content',
+          range: a == null ? null : '${a['start_line']}–${a['end_line']}');
+    case 'write_file':
+      return _writeView(a, d, verb: 'Wrote');
+    case 'append_file':
+      return _appendView(a, d);
+    case 'read_file':
+      return _readView(a, d);
+    case 'read_image':
+      return _imageView(a, d);
+    case 'bash':
+      return _bashView(a, d);
+    case 'search_content':
+      return _grepView(a, d);
+    case 'search_files':
+      return _findView(a, d);
+    case 'list_files':
+      return _lsView(a, d);
+    case 'view_outline':
+      return _outlineView(a, d);
+    case 'code_map':
+      return _codeMapView(a, d);
+    case 'web_search':
+      return _webSearchView(a, d);
+    case 'web_read':
+      return _webReadView(a, d);
+    default:
+      return _jsonFallback(a, d, status);
+  }
+}
+
+// ---- per-tool views ----
+
+List<Widget> _editView(Map? a, Map? d,
+    {required String oldKey, required String newKey, String? range}) {
+  final out = <Widget>[];
+  if (a != null) out.add(_PathChip(a['path']?.toString() ?? ''));
+  if (range != null) {
+    out.add(const SizedBox(height: 8));
+    out.add(_meta([_chip('list', 'lines $range')]));
+  }
+  if (a != null && a[oldKey] != null && a[newKey] != null) {
+    out.add(const SizedBox(height: 12));
+    out.add(const SectionLabel('Diff'));
+    out.add(const SizedBox(height: 8));
+    out.add(_DiffBlock(a[oldKey].toString(), a[newKey].toString()));
+  } else if (a == null) {
+    out.add(_done(d?['edited'] == true || d?['replaced'] == true ? 'Applied' : 'Pending'));
+  }
+  if (d?['note'] != null) {
+    out.add(const SizedBox(height: 10));
+    out.add(_Hint(d!['note'].toString()));
+  }
+  return out;
+}
+
+List<Widget> _writeView(Map? a, Map? d, {required String verb}) {
+  final out = <Widget>[];
+  final path = a?['path']?.toString() ?? d?['path']?.toString() ?? '';
+  out.add(_PathChip(path));
+  final content = a?['content']?.toString();
+  if (content != null) {
+    out.add(const SizedBox(height: 8));
+    out.add(_meta([_chip('list', '${'\n'.allMatches(content).length + 1} lines')]));
+    out.add(const SizedBox(height: 12));
+    out.add(const SectionLabel('Contents'));
+    out.add(const SizedBox(height: 8));
+    out.add(_NumberedCode(content));
+  } else if (d?['written'] == true) {
+    out.add(_done('$verb file'));
+  }
+  return out;
+}
+
+List<Widget> _appendView(Map? a, Map? d) {
+  final out = <Widget>[];
+  out.add(_PathChip(a?['path']?.toString() ?? d?['path']?.toString() ?? ''));
+  final chips = <Widget>[];
+  if (d?['lines_written'] != null) chips.add(_chip('file-plus', '+${d!['lines_written']} lines'));
+  if (d?['total_lines'] != null) chips.add(_chip('list', '${d!['total_lines']} total'));
+  if (chips.isNotEmpty) {
+    out.add(const SizedBox(height: 8));
+    out.add(_meta(chips));
+  }
+  final content = a?['content']?.toString();
+  if (content != null && content.isNotEmpty) {
+    out.add(const SizedBox(height: 12));
+    out.add(const SectionLabel('Appended'));
+    out.add(const SizedBox(height: 8));
+    out.add(_CodeBox(content, addTint: true));
+  }
+  return out;
+}
+
+List<Widget> _readView(Map? a, Map? d) {
+  final out = <Widget>[];
+  out.add(_PathChip(a?['path']?.toString() ?? d?['path']?.toString() ?? ''));
+  final chips = <Widget>[];
+  final sl = d?['start_line'], el = d?['end_line'];
+  if (sl != null || el != null) chips.add(_chip('list', 'lines $sl–$el'));
+  if (d?['total_lines'] != null) chips.add(_chip('file', '${d!['total_lines']} lines'));
+  if (d?['total_chars'] != null) chips.add(_chip('grip', '${d!['total_chars']} chars'));
+  if (chips.isNotEmpty) {
+    out.add(const SizedBox(height: 8));
+    out.add(_meta(chips));
+  }
+  final content = d?['content']?.toString();
+  if (content != null) {
+    out.add(const SizedBox(height: 12));
+    out.add(const SectionLabel('Contents'));
+    out.add(const SizedBox(height: 8));
+    final start = sl is int ? sl : (d?['start_char'] == null ? 1 : null);
+    out.add(_NumberedCode(content, startLine: start));
+  }
+  if (d?['truncated'] == true && d?['hint'] != null) {
+    out.add(const SizedBox(height: 10));
+    out.add(_Hint(d!['hint'].toString()));
+  }
+  return out;
+}
+
+List<Widget> _imageView(Map? a, Map? d) {
+  return [
+    _PathChip(a?['path']?.toString() ?? d?['path']?.toString() ?? ''),
+    const SizedBox(height: 12),
+    Center(
+      child: Column(children: [
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            color: AppColors.surface2,
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const AppIcon('image', size: 30, color: AppColors.fg3),
+        ),
+        const SizedBox(height: 12),
+        if (d != null)
+          _meta([
+            if (d['mime'] != null) _chip('image', d['mime'].toString()),
+            if (d['size_bytes'] != null) _chip('grip', _bytes(d['size_bytes'])),
+          ]),
+      ]),
+    ),
+  ];
+}
+
+List<Widget> _bashView(Map? a, Map? d) {
+  final out = <Widget>[];
+  final cmd = a?['command']?.toString() ?? d?['command']?.toString() ?? '';
+  out.add(const SectionLabel('Command'));
+  out.add(const SizedBox(height: 8));
+  out.add(_CommandBox(cmd));
+  if (d != null) {
+    final code = d['exit_code'];
+    final ok = d['success'] == true || code == 0;
+    out.add(const SizedBox(height: 12));
+    out.add(_meta([
+      _statusChip(ok, ok ? 'exit 0' : 'exit ${code ?? '?'}'),
+    ]));
+    final stdout = d['stdout']?.toString() ?? '';
+    final stderr = d['stderr']?.toString() ?? '';
+    if (stdout.trim().isNotEmpty) {
+      out.add(const SizedBox(height: 12));
+      out.add(const SectionLabel('stdout'));
+      out.add(const SizedBox(height: 8));
+      out.add(_CodeBox(stdout));
+    }
+    if (stderr.trim().isNotEmpty) {
+      out.add(const SizedBox(height: 12));
+      out.add(const SectionLabel('stderr'));
+      out.add(const SizedBox(height: 8));
+      out.add(_CodeBox(stderr, delTint: true));
+    }
+    if (stdout.trim().isEmpty && stderr.trim().isEmpty) {
+      out.add(const SizedBox(height: 10));
+      out.add(Text('(no output)', style: mono(11.5, color: AppColors.fg4)));
+    }
+  }
+  return out;
+}
+
+List<Widget> _grepView(Map? a, Map? d) {
+  final out = <Widget>[];
+  out.add(_meta([
+    _chip('search', '"${a?['query'] ?? d?['query'] ?? ''}"'),
+    if (d?['count'] != null) _chip('list', '${d!['count']} matches'),
+  ]));
+  final results = (d?['results'] as List?) ?? const [];
+  if (results.isNotEmpty) {
+    out.add(const SizedBox(height: 12));
+    out.add(_Card(
+      children: [
+        for (final m in results.cast<Map>())
+          _MatchRow(
+            path: m['path']?.toString() ?? '',
+            line: m['line_number']?.toString(),
+            text: m['content']?.toString() ?? '',
+          ),
+      ],
+    ));
+  } else if (d != null) {
+    out.add(const SizedBox(height: 10));
+    out.add(_empty('No matches'));
+  }
+  if (d?['truncated'] == true && d?['hint'] != null) {
+    out.add(const SizedBox(height: 10));
+    out.add(_Hint(d!['hint'].toString()));
+  }
+  return out;
+}
+
+List<Widget> _findView(Map? a, Map? d) {
+  final out = <Widget>[];
+  out.add(_meta([
+    _chip('search', a?['pattern']?.toString() ?? d?['pattern']?.toString() ?? '*'),
+    if (d?['count'] != null) _chip('file', '${d!['count']} files'),
+  ]));
+  final results = (d?['results'] as List?) ?? const [];
+  if (results.isNotEmpty) {
+    out.add(const SizedBox(height: 12));
+    out.add(_Card(children: [
+      for (final f in results.cast<Map>())
+        _FileRow(icon: 'file', name: f['path']?.toString() ?? f['name']?.toString() ?? ''),
+    ]));
+  } else if (d != null) {
+    out.add(const SizedBox(height: 10));
+    out.add(_empty('No files found'));
+  }
+  return out;
+}
+
+List<Widget> _lsView(Map? a, Map? d) {
+  final out = <Widget>[];
+  out.add(_PathChip(a?['path']?.toString() ?? d?['path']?.toString() ?? '.'));
+  final entries = ((d?['entries'] as List?) ?? const []).cast<Map>().toList()
+    ..sort((x, y) {
+      final dx = x['kind'] == 'dir' ? 0 : 1, dy = y['kind'] == 'dir' ? 0 : 1;
+      if (dx != dy) return dx - dy;
+      return (x['name']?.toString() ?? '').compareTo(y['name']?.toString() ?? '');
+    });
+  if (entries.isNotEmpty) {
+    out.add(const SizedBox(height: 12));
+    out.add(_Card(children: [
+      for (final e in entries)
+        _FileRow(
+          icon: e['kind'] == 'dir' ? 'folder' : 'file',
+          name: e['name']?.toString() ?? '',
+          dir: e['kind'] == 'dir',
+        ),
+    ]));
+  } else if (d != null) {
+    out.add(const SizedBox(height: 10));
+    out.add(_empty('Empty directory'));
+  }
+  return out;
+}
+
+List<Widget> _outlineView(Map? a, Map? d) {
+  final out = <Widget>[];
+  out.add(_PathChip(a?['path']?.toString() ?? d?['path']?.toString() ?? ''));
+  if (d?['is_directory'] == true) {
+    return [...out, const SizedBox(height: 10), ..._lsView(a, d).skip(1)];
+  }
+  if (d?['supported'] == false) {
+    out.add(const SizedBox(height: 10));
+    out.add(_Hint(d?['note']?.toString() ?? 'No outline available.'));
+    return out;
+  }
+  out.add(const SizedBox(height: 8));
+  out.add(_meta([
+    if (d?['language'] != null) _chip('cpu', d!['language'].toString()),
+    if (d?['symbol_count'] != null) _chip('list', '${d!['symbol_count']} symbols'),
+  ]));
+  final outline = (d?['outline'] as List?) ?? const [];
+  if (outline.isNotEmpty) {
+    out.add(const SizedBox(height: 12));
+    out.add(_Card(children: [
+      for (final s in outline.cast<Map>())
+        _SymbolRow(
+          kind: s['kind']?.toString() ?? '',
+          signature: s['signature']?.toString() ?? '',
+          line: s['line_number']?.toString(),
+          depth: (s['depth'] is int) ? s['depth'] as int : 0,
+        ),
+    ]));
+  }
+  return out;
+}
+
+List<Widget> _codeMapView(Map? a, Map? d) {
+  final out = <Widget>[];
+  out.add(_meta([
+    _chip('map', (d?['root'] ?? a?['path'] ?? '.').toString()),
+    if (d?['file_count'] != null) _chip('file', '${d!['file_count']} files'),
+    if (d?['symbol_count'] != null) _chip('list', '${d!['symbol_count']} symbols'),
+  ]));
+  final files = (d?['files'] as List?) ?? const [];
+  for (final f in files.cast<Map>()) {
+    out.add(const SizedBox(height: 12));
+    out.add(_FileRow(icon: 'file', name: f['path']?.toString() ?? ''));
+    final syms = (f['symbols'] as List?) ?? const [];
+    out.add(const SizedBox(height: 4));
+    out.add(_Card(children: [
+      for (final s in syms)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Text(s.toString(), style: mono(11.5, height: 1.4, color: AppColors.fg2)),
+        ),
+    ]));
+  }
+  if (d?['truncated'] == true && d?['hint'] != null) {
+    out.add(const SizedBox(height: 10));
+    out.add(_Hint(d!['hint'].toString()));
+  }
+  return out;
+}
+
+List<Widget> _webSearchView(Map? a, Map? d) {
+  final out = <Widget>[];
+  out.add(_meta([
+    _chip('globe', '"${a?['query'] ?? d?['query'] ?? ''}"'),
+    if (d?['count'] != null) _chip('list', '${d!['count']} results'),
+  ]));
+  final results = (d?['results'] as List?) ?? const [];
+  for (final res in results.cast<Map>()) {
+    out.add(const SizedBox(height: 12));
+    out.add(_ResultCard(
+      title: res['title']?.toString() ?? '',
+      url: res['url']?.toString() ?? '',
+      date: res['published_date']?.toString(),
+      snippet: res['snippet']?.toString(),
+    ));
+  }
+  return out;
+}
+
+List<Widget> _webReadView(Map? a, Map? d) {
+  final out = <Widget>[];
+  final title = d?['title']?.toString() ?? '';
+  final url = d?['url']?.toString() ?? a?['url']?.toString() ?? '';
+  if (title.isNotEmpty) {
+    out.add(Text(title, style: sans(14.5, weight: FontWeight.w600, color: AppColors.fg1)));
+    out.add(const SizedBox(height: 4));
+  }
+  out.add(_LinkText(url));
+  if (d?['published_date'] != null) {
+    out.add(const SizedBox(height: 6));
+    out.add(_meta([_chip('history', d!['published_date'].toString())]));
+  }
+  final text = d?['text']?.toString();
+  if (text != null && text.isNotEmpty) {
+    out.add(const SizedBox(height: 12));
+    out.add(const SectionLabel('Page text'));
+    out.add(const SizedBox(height: 8));
+    out.add(_CodeBox(text, useSans: true));
+  }
+  return out;
+}
+
+List<Widget> _jsonFallback(Map? a, Map? d, String? status) {
+  final out = <Widget>[];
+  if (a != null) {
+    out.add(const SectionLabel('Arguments'));
+    out.add(const SizedBox(height: 8));
+    out.add(_CodeBox(_pretty(a)));
+  }
+  if (d != null) {
+    if (a != null) out.add(const SizedBox(height: 16));
+    out.add(const SectionLabel('Result'));
+    out.add(const SizedBox(height: 8));
+    out.add(_CodeBox(_pretty(d)));
+  }
+  return out;
+}
+
+// ---- shared pieces ----
+
+String _pretty(dynamic v) {
+  String s;
+  try {
+    s = const JsonEncoder.withIndent('  ').convert(v);
+  } catch (_) {
+    s = v.toString();
+  }
+  return s.length > 6000 ? '${s.substring(0, 6000)}\n…(truncated)' : s;
+}
+
+String _bytes(dynamic n) {
+  final b = n is int ? n : int.tryParse(n.toString()) ?? 0;
+  if (b < 1024) return '$b B';
+  if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)} KB';
+  return '${(b / 1024 / 1024).toStringAsFixed(1)} MB';
+}
+
+Widget _meta(List<Widget> chips) => Wrap(spacing: 7, runSpacing: 7, children: chips);
+
+Widget _chip(String icon, String label) => Container(
+      padding: const EdgeInsets.fromLTRB(7, 4, 9, 4),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        AppIcon(icon, size: 11, color: AppColors.fg3),
+        const SizedBox(width: 5),
+        Text(label, style: mono(10.5, color: AppColors.fg2)),
+      ]),
+    );
+
+Widget _statusChip(bool ok, String label) => Container(
+      padding: const EdgeInsets.fromLTRB(7, 4, 9, 4),
+      decoration: BoxDecoration(
+        color: ok ? AppColors.okBg : AppColors.dangerBg,
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        AppIcon(ok ? 'check' : 'alert-triangle', size: 11, color: ok ? AppColors.ok : AppColors.danger),
+        const SizedBox(width: 5),
+        Text(label, style: mono(10.5, weight: FontWeight.w500, color: ok ? AppColors.ok : AppColors.danger)),
+      ]),
+    );
+
+Widget _done(String label) => Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: _meta([_statusChip(true, label)]),
+    );
+
+Widget _empty(String label) => Text(label, style: sans(12.5, color: AppColors.fg3));
+
+class _PathChip extends StatelessWidget {
+  final String path;
+  const _PathChip(this.path);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(R.sm),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(children: [
+        const AppIcon('file', size: 13, color: AppColors.fg3),
+        const SizedBox(width: 8),
+        Expanded(child: SelectableText(path, style: mono(12, color: AppColors.fg1))),
+      ]),
+    );
+  }
+}
+
+class _Card extends StatelessWidget {
+  final List<Widget> children;
+  const _Card({required this.children});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(R.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const Divider(height: 1, thickness: 1, color: AppColors.border),
+            children[i],
+          ]
+        ],
+      ),
+    );
+  }
+}
+
+class _FileRow extends StatelessWidget {
+  final String icon;
+  final String name;
+  final bool dir;
+  const _FileRow({required this.icon, required this.name, this.dir = false});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Row(children: [
+        AppIcon(icon, size: 14, color: dir ? AppColors.accent : AppColors.fg3),
+        const SizedBox(width: 9),
+        Expanded(child: Text(name, style: mono(12, color: dir ? AppColors.fg1 : AppColors.fg2))),
+      ]),
+    );
+  }
+}
+
+class _MatchRow extends StatelessWidget {
+  final String path;
+  final String? line;
+  final String text;
+  const _MatchRow({required this.path, this.line, required this.text});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Flexible(child: Text(path, overflow: TextOverflow.ellipsis, style: mono(11, color: AppColors.accent))),
+          if (line != null) Text(':$line', style: mono(11, color: AppColors.fg4)),
+        ]),
+        const SizedBox(height: 3),
+        Text(text, style: mono(11.5, height: 1.4, color: AppColors.fg2)),
+      ]),
+    );
+  }
+}
+
+class _SymbolRow extends StatelessWidget {
+  final String kind;
+  final String signature;
+  final String? line;
+  final int depth;
+  const _SymbolRow({required this.kind, required this.signature, this.line, this.depth = 0});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(10.0 + depth * 14, 7, 10, 7),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+          decoration: BoxDecoration(color: AppColors.accentBg, borderRadius: BorderRadius.circular(4)),
+          child: Text(kind, style: mono(9.5, color: AppColors.accent)),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: Text(signature, style: mono(11.5, height: 1.4, color: AppColors.fg1))),
+        if (line != null) ...[
+          const SizedBox(width: 6),
+          Text(':$line', style: mono(10.5, color: AppColors.fg4)),
+        ],
+      ]),
+    );
+  }
+}
+
+class _ResultCard extends StatelessWidget {
+  final String title;
+  final String url;
+  final String? date;
+  final String? snippet;
+  const _ResultCard({required this.title, required this.url, this.date, this.snippet});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(R.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (title.isNotEmpty)
+          Text(title, style: sans(13.5, weight: FontWeight.w600, color: AppColors.fg1)),
+        if (title.isNotEmpty) const SizedBox(height: 4),
+        _LinkText(url),
+        if (snippet != null && snippet!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(snippet!, style: sans(12, height: 1.45, color: AppColors.fg2)),
+        ],
+        if (date != null) ...[
+          const SizedBox(height: 6),
+          Text(date!, style: mono(10, color: AppColors.fg4)),
+        ],
+      ]),
+    );
+  }
+}
+
+class _LinkText extends StatelessWidget {
+  final String url;
+  const _LinkText(this.url);
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      const AppIcon('globe', size: 11, color: AppColors.fg4),
+      const SizedBox(width: 5),
+      Expanded(child: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(11, color: AppColors.accent))),
+    ]);
+  }
+}
+
+class _ErrorBox extends StatelessWidget {
+  final String message;
+  const _ErrorBox(this.message);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.dangerBg,
+        borderRadius: BorderRadius.circular(R.md),
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Padding(padding: EdgeInsets.only(top: 1), child: AppIcon('alert-triangle', size: 14, color: AppColors.danger)),
+        const SizedBox(width: 9),
+        Expanded(child: SelectableText(message, style: mono(11.5, height: 1.45, color: AppColors.danger))),
+      ]),
+    );
+  }
+}
+
+class _Hint extends StatelessWidget {
+  final String text;
+  const _Hint(this.text);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(R.sm),
+        border: const Border(left: BorderSide(color: AppColors.accentLine, width: 3)),
+      ),
+      child: Text(text, style: sans(12, height: 1.45, color: AppColors.fg2)),
+    );
+  }
+}
+
+/// Plain monospace block (selectable). Optional add/del tint or sans font.
+class _CodeBox extends StatelessWidget {
+  final String text;
+  final bool addTint;
+  final bool delTint;
+  final bool useSans;
+  const _CodeBox(this.text, {this.addTint = false, this.delTint = false, this.useSans = false});
+  @override
+  Widget build(BuildContext context) {
+    final bg = addTint
+        ? AppColors.diffAddBg
+        : delTint
+            ? AppColors.diffDelBg
+            : AppColors.surface2;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(R.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: SelectableText(
+        text,
+        style: useSans
+            ? sans(12, height: 1.5, color: AppColors.fg1)
+            : mono(11.5, height: 1.5, color: AppColors.fg1),
+      ),
+    );
+  }
+}
+
+/// Shell command box with a `$` prompt.
+class _CommandBox extends StatelessWidget {
+  final String command;
+  const _CommandBox(this.command);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(R.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('\$ ', style: mono(11.5, height: 1.5, color: AppColors.accent)),
+        Expanded(child: SelectableText(command, style: mono(11.5, height: 1.5, color: AppColors.fg1))),
+      ]),
+    );
+  }
+}
+
+/// Monospace block with a line-number gutter.
+class _NumberedCode extends StatelessWidget {
+  final String text;
+  final int? startLine;
+  const _NumberedCode(this.text, {this.startLine});
+  @override
+  Widget build(BuildContext context) {
+    final lines = text.split('\n');
+    final base = startLine ?? 1;
+    final width = '${base + lines.length}'.length;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(R.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        for (var i = 0; i < lines.length; i++)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0.5),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SizedBox(
+                width: width * 8.0 + 6,
+                child: Text('${base + i}'.padLeft(width),
+                    style: mono(11, height: 1.5, color: AppColors.diffGutter)),
+              ),
+              Expanded(child: Text(lines[i], style: mono(11.5, height: 1.5, color: AppColors.fg1))),
+            ]),
+          ),
+      ]),
+    );
+  }
+}
+
+// ---- diff ----
+
+enum _DKind { ctx, add, del }
+
+class _DLine {
+  final _DKind kind;
+  final String text;
+  const _DLine(this.kind, this.text);
+}
+
+/// Line-level unified diff via LCS. Falls back to remove-all/add-all for very
+/// large inputs (keeps it O(1) instead of O(n·m)).
+List<_DLine> _diff(String aStr, String bStr) {
+  final a = aStr.split('\n');
+  final b = bStr.split('\n');
+  final n = a.length, m = b.length;
+  if (n * m > 250000) {
+    return [
+      for (final l in a) _DLine(_DKind.del, l),
+      for (final l in b) _DLine(_DKind.add, l),
+    ];
+  }
+  // LCS dp table (suffix form).
+  final dp = List.generate(n + 1, (_) => List<int>.filled(m + 1, 0));
+  for (var i = n - 1; i >= 0; i--) {
+    for (var j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] == b[j] ? dp[i + 1][j + 1] + 1 : (dp[i + 1][j] >= dp[i][j + 1] ? dp[i + 1][j] : dp[i][j + 1]);
+    }
+  }
+  final out = <_DLine>[];
+  var i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] == b[j]) {
+      out.add(_DLine(_DKind.ctx, a[i]));
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      out.add(_DLine(_DKind.del, a[i]));
+      i++;
+    } else {
+      out.add(_DLine(_DKind.add, b[j]));
+      j++;
+    }
+  }
+  while (i < n) {
+    out.add(_DLine(_DKind.del, a[i++]));
+  }
+  while (j < m) {
+    out.add(_DLine(_DKind.add, b[j++]));
+  }
+  return out;
+}
+
+class _DiffBlock extends StatelessWidget {
+  final String before;
+  final String after;
+  const _DiffBlock(this.before, this.after);
+  @override
+  Widget build(BuildContext context) {
+    final lines = _diff(before, after);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(R.md),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(R.md)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [for (final l in lines) _row(l)],
+        ),
+      ),
+    );
+  }
+
+  Widget _row(_DLine l) {
+    final (Color bg, Color fg, String sign) = switch (l.kind) {
+      _DKind.add => (AppColors.diffAddBg, AppColors.diffAddFg, '+'),
+      _DKind.del => (AppColors.diffDelBg, AppColors.diffDelFg, '-'),
+      _DKind.ctx => (AppColors.surface2, AppColors.fg3, ' '),
+    };
+    return Container(
+      width: double.infinity,
+      color: bg,
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 1.5),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 12, child: Text(sign, style: mono(11.5, height: 1.45, color: fg))),
+        Expanded(child: Text(l.text.isEmpty ? ' ' : l.text, style: mono(11.5, height: 1.45, color: fg))),
+      ]),
+    );
+  }
+}

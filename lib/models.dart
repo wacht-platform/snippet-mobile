@@ -109,6 +109,21 @@ class FsListing {
             .toList();
 }
 
+class FileContent {
+  final String path;
+  final String content;
+  final int size;
+  final bool truncated;
+  final bool binary;
+
+  FileContent.fromJson(Map<String, dynamic> j)
+      : path = j['path'] as String? ?? '',
+        content = j['content'] as String? ?? '',
+        size = (j['size'] as num?)?.toInt() ?? 0,
+        truncated = j['truncated'] == true,
+        binary = j['binary'] == true;
+}
+
 class RateWindow {
   final double usedPercent;
   final int windowMinutes;

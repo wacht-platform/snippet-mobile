@@ -327,13 +327,14 @@ class ToolLine extends StatelessWidget {
   final String arg;
   final String? out;
   final bool done;
+  final String icon;
   final VoidCallback? onTap;
-  const ToolLine({super.key, required this.tool, this.arg = '', this.out, this.done = true, this.onTap});
+  const ToolLine({super.key, required this.tool, this.arg = '', this.out, this.done = true, this.icon = 'terminal', this.onTap});
   @override
   Widget build(BuildContext context) {
     final inner = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        const AppIcon('terminal', size: 13, color: AppColors.fg3),
+        AppIcon(icon, size: 13, color: AppColors.fg3),
         const SizedBox(width: 7),
         Text(tool, style: mono(12, color: AppColors.accent)),
         const SizedBox(width: 7),

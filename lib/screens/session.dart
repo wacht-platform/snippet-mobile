@@ -7,6 +7,7 @@ import '../api.dart';
 import '../models.dart';
 import '../notifications.dart';
 import '../theme.dart';
+import '../tool_views.dart';
 import '../widgets.dart';
 
 class SessionScreen extends StatefulWidget {
@@ -28,6 +29,9 @@ class _SessionScreenState extends State<SessionScreen> {
   bool _isCodex = false;
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  // Messages sent mid-run, shown optimistically until the daemon applies them as
+  // a `steer` event (then reconciled away). Cancelled via the drop_queued input.
+  final List<String> _queued = [];
 
   @override
   void initState() {
@@ -79,7 +83,10 @@ class _SessionScreenState extends State<SessionScreen> {
           if (!mounted) return;
           final cur = _state;
           final next = (j['wire'] == 'delta' && cur != null) ? cur.applyDelta(j) : HarnessState.fromJson(j);
-          setState(() => _state = next);
+          setState(() {
+            _state = next;
+            _reconcileQueued(next.events);
+          });
           WidgetsBinding.instance.addPostFrameCallback((_) => _toBottom());
         } catch (_) {}
       },
@@ -102,8 +109,39 @@ class _SessionScreenState extends State<SessionScreen> {
     final running = _state?.status == 'running';
     _send({'kind': 'user_message', 'value': t});
     _input.clear();
-    if (running) _toast('Queued — runs after the current turn');
-    setState(() {});
+    // While running, show it on-screen as a queued bubble instead of a toast.
+    setState(() {
+      if (running) _queued.add(t);
+    });
+  }
+
+  // Cancel everything still queued for this run (drop_queued clears the daemon's
+  // pending buffer; if some already applied, those stay as real bubbles).
+  void _cancelQueued() {
+    _send({'kind': 'drop_queued'});
+    setState(() => _queued.clear());
+  }
+
+  // Drop queued items that the daemon has now applied (they arrive as `steer`
+  // events). FIFO match so duplicate texts reconcile in order.
+  void _reconcileQueued(List<Map<String, dynamic>> events) {
+    if (_queued.isEmpty) return;
+    final applied = <String>[];
+    for (final e in events) {
+      if (e['kind'] == 'steer') applied.add(e['text']?.toString() ?? '');
+    }
+    final remaining = <String>[];
+    for (final q in _queued) {
+      final i = applied.indexOf(q);
+      if (i >= 0) {
+        applied.removeAt(i);
+      } else {
+        remaining.add(q);
+      }
+    }
+    _queued
+      ..clear()
+      ..addAll(remaining);
   }
 
   void _toast(String m) {
@@ -159,6 +197,10 @@ class _SessionScreenState extends State<SessionScreen> {
                         const EmptyState(icon: 'terminal', title: 'Session ready', body: 'Send a task to get started.'),
                       ...items,
                       if (running) ...[const SizedBox(height: 12), const _TypingDots()],
+                      if (_queued.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        for (final q in _queued) _QueuedBubble(text: q, onCancel: _cancelQueued),
+                      ],
                       if (waiting && _pendingApproval(events)) ...[const SizedBox(height: 12), _ApprovalBar(onSend: _send)],
                     ],
                   ),
@@ -311,7 +353,8 @@ class _SessionScreenState extends State<SessionScreen> {
     void flush() {
       final p = pending;
       if (p != null) {
-        out.add(ToolLine(tool: _s(p['tool_name']), arg: _short(p['arguments']), onTap: () => _showToolDetail(_s(p['tool_name']), p['arguments'], null)));
+        final name = _s(p['tool_name']);
+        out.add(ToolLine(tool: name, icon: toolIcon(name), arg: toolArgSummary(name, p['arguments']), done: false, onTap: () => _showToolDetail(name, p['arguments'], null)));
         pending = null;
       }
     }
@@ -326,10 +369,12 @@ class _SessionScreenState extends State<SessionScreen> {
           {
             final p = pending;
             if (p != null) {
-              out.add(ToolLine(tool: _s(p['tool_name']), arg: _short(p['arguments']), out: _resultStatus(e['result']), onTap: () => _showToolDetail(_s(p['tool_name']), p['arguments'], e['result'])));
+              final name = _s(p['tool_name']);
+              out.add(ToolLine(tool: name, icon: toolIcon(name), arg: toolArgSummary(name, p['arguments']), out: _resultStatus(e['result']), done: _ok(e['result']), onTap: () => _showToolDetail(name, p['arguments'], e['result'])));
               pending = null;
             } else {
-              out.add(ToolLine(tool: _s(e['tool_name']), out: _resultStatus(e['result']), onTap: () => _showToolDetail(_s(e['tool_name']), null, e['result'])));
+              final name = _s(e['tool_name']);
+              out.add(ToolLine(tool: name, icon: toolIcon(name), out: _resultStatus(e['result']), done: _ok(e['result']), onTap: () => _showToolDetail(name, null, e['result'])));
             }
           }
         case 'user_input':
@@ -368,52 +413,23 @@ class _SessionScreenState extends State<SessionScreen> {
   }
 
   String _s(dynamic v) => v?.toString() ?? '';
-  String _short(dynamic v) {
-    if (v == null) return '';
-    if (v is Map) {
-      for (final key in ['command', 'path', 'query', 'file']) {
-        if (v[key] is String) return v[key] as String;
-      }
-    }
-    final s = v is String ? v : jsonEncode(v);
-    return s.length > 80 ? '${s.substring(0, 80)}…' : s;
+
+  // Short result tag shown on the inline line: exit code for bash, else status.
+  String _resultStatus(dynamic r) {
+    if (r is! Map) return 'done';
+    final data = r['data'];
+    if (data is Map && data['exit_code'] != null) return 'exit ${data['exit_code']}';
+    final st = r['status']?.toString();
+    if (st == 'error') return 'error';
+    return 'done';
   }
 
-  String _resultStatus(dynamic r) => (r is Map && r['status'] != null) ? r['status'].toString() : 'done';
+  bool _ok(dynamic r) => !(r is Map && r['status'] == 'error');
 
   void _showToolDetail(String name, dynamic args, dynamic result) {
-    showAppSheet(context, title: name, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      if (args != null) ...[
-        const SectionLabel('Arguments'),
-        const SizedBox(height: 8),
-        _detailBlock(_pretty(args)),
-        const SizedBox(height: 16),
-      ],
-      if (result != null) ...[
-        const SectionLabel('Result'),
-        const SizedBox(height: 8),
-        _detailBlock(_pretty(result is Map && result['data'] != null ? result['data'] : result)),
-      ],
-      if (args == null && result == null) Text('No details.', style: sans(12.5, color: AppColors.fg3)),
-    ]));
-  }
-
-  Widget _detailBlock(String text) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: AppColors.surface2, border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(R.md)),
-        child: SelectableText(text, style: mono(11.5, height: 1.5, color: AppColors.fg1)),
-      );
-
-  String _pretty(dynamic v) {
-    if (v is String) return v.length > 6000 ? '${v.substring(0, 6000)}\n…(truncated)' : v;
-    String s;
-    try {
-      s = const JsonEncoder.withIndent('  ').convert(v);
-    } catch (_) {
-      s = v.toString();
-    }
-    return s.length > 6000 ? '${s.substring(0, 6000)}\n…(truncated)' : s;
+    showAppSheet(context,
+        title: toolTitle(name),
+        child: toolDetailView(context, tool: name, args: args, result: result));
   }
 
   Future<void> _switchModel() async {
@@ -681,6 +697,48 @@ class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderState
             },
           );
         })),
+      ),
+    );
+  }
+}
+
+/// A message sent mid-run, shown right-aligned + dimmed with a cancel (✕) until
+/// the daemon applies it (then it's replaced by the real bubble).
+class _QueuedBubble extends StatelessWidget {
+  final String text;
+  final VoidCallback onCancel;
+  const _QueuedBubble({required this.text, required this.onCancel});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.82),
+          padding: const EdgeInsets.fromLTRB(13, 9, 7, 9),
+          decoration: BoxDecoration(
+            color: AppColors.surface2,
+            border: Border.all(color: AppColors.border2, style: BorderStyle.solid),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+              bottomRight: Radius.circular(5),
+              bottomLeft: Radius.circular(16),
+            ),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Padding(padding: EdgeInsets.only(top: 2, right: 7), child: AppIcon('history', size: 12, color: AppColors.fg3)),
+            Flexible(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text('Queued', style: sans(10, weight: FontWeight.w500, color: AppColors.fg3)),
+                const SizedBox(height: 2),
+                Text(text, style: sans(13.5, height: 1.4, color: AppColors.fg2)),
+              ]),
+            ),
+            IconBtn('x', size: 28, iconSize: 15, tooltip: 'Cancel', onTap: onCancel),
+          ]),
+        ),
       ),
     );
   }

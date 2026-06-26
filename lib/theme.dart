@@ -30,6 +30,13 @@ class AppColors {
   static const runBg = Color(0x29D9A441);
   static const danger = Color(0xFFEB5C4D);
   static const dangerBg = Color(0x29EB5C4D);
+
+  // diff line tints (subtler than the *Bg chips)
+  static const diffAddBg = Color(0x2239C57E);
+  static const diffDelBg = Color(0x22EB5C4D);
+  static const diffAddFg = Color(0xFF93E2B7);
+  static const diffDelFg = Color(0xFFF09C90);
+  static const diffGutter = Color(0xFF4A4A4A);
 }
 
 class R {
@@ -170,6 +177,16 @@ IconData iconFor(String name) {
       return Icons.remove;
     case 'rotate':
       return Icons.restore;
+    case 'globe':
+      return Icons.public;
+    case 'map':
+      return Icons.account_tree_outlined;
+    case 'list':
+      return Icons.format_list_bulleted;
+    case 'file-plus':
+      return Icons.note_add_outlined;
+    case 'corner-down-right':
+      return Icons.subdirectory_arrow_right;
     default:
       return Icons.circle_outlined;
   }
