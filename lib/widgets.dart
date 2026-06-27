@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'theme.dart';
+
+/// Open a markdown link in the external browser (fire-and-forget).
+void openMarkdownLink(String? href) {
+  if (href == null || href.isEmpty) return;
+  final uri = Uri.tryParse(href);
+  if (uri == null) return;
+  launchUrl(uri, mode: LaunchMode.externalApplication);
+}
 
 /// Themed markdown stylesheet for agent messages.
 MarkdownStyleSheet markdownStyle(BuildContext context) {
@@ -317,7 +326,14 @@ class Bubble extends StatelessWidget {
         // blocks at once (per-block `selectable: true` can't span paragraphs/lines).
         child: mine
             ? SelectableText(text, style: sans(13.5, height: 1.5, color: AppColors.fg1))
-            : SelectionArea(child: MarkdownBody(data: text, selectable: false, styleSheet: markdownStyle(context))),
+            : SelectionArea(
+                child: MarkdownBody(
+                  data: text,
+                  selectable: false,
+                  styleSheet: markdownStyle(context),
+                  onTapLink: (txt, href, title) => openMarkdownLink(href),
+                ),
+              ),
       ),
     );
   }
