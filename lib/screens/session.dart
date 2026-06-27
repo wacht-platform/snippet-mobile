@@ -46,6 +46,8 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   int _reconnectAttempt = 0;
   bool _closed = false;
   late String _title;
+  // Tracks the last status so we can detect running → paused and flush _queued.
+  String? _prevStatus;
 
   @override
   void initState() {
@@ -119,9 +121,17 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           // Only auto-follow if the user is already at the bottom — don't yank them
           // down when they've scrolled up to read history.
           final follow = _atBottom();
+          // The moment the run pauses (running → not running), auto-submit anything
+          // the user queued while it was busy.
+          if (_prevStatus == 'running' && next.status != 'running' && _queued.isNotEmpty) {
+            for (final m in _queued) {
+              _send({'kind': 'user_message', 'value': m});
+            }
+            _queued.clear();
+          }
+          _prevStatus = next.status;
           setState(() {
             _state = next;
-            _reconcileQueued(next.events);
           });
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (firstLoad) {
@@ -185,15 +195,18 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     // reliably views it this turn.
     final marker = '[attached image — call read_image on this exact path to view it: $img]';
     final msg = img == null ? t : (t.isEmpty ? marker : '$t\n\n$marker');
-    _send({'kind': 'user_message', 'value': msg});
-    _input.clear();
-    // While running, show it on-screen as a queued bubble instead of a toast.
     setState(() {
-      if (running) _queued.add(t.isEmpty ? '🖼 image' : t);
+      if (running) {
+        // Busy: hold it and auto-submit when the run pauses (don't steer mid-task).
+        _queued.add(msg);
+      } else {
+        _send({'kind': 'user_message', 'value': msg});
+      }
       _localImagePath = null;
       _pendingImagePath = null;
       _uploading = false;
     });
+    _input.clear();
     // Sending is an explicit action — follow to the bottom to show it.
     WidgetsBinding.instance.addPostFrameCallback((_) => _toBottom());
   }
@@ -224,31 +237,16 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
   // Cancel everything still queued for this run (drop_queued clears the daemon's
   // pending buffer; if some already applied, those stay as real bubbles).
-  void _cancelQueued() {
-    _send({'kind': 'drop_queued'});
-    setState(() => _queued.clear());
-  }
+  // Held messages were never sent to the daemon yet — just drop them locally.
+  void _cancelQueued() => setState(() => _queued.clear());
 
   // Drop queued items that the daemon has now applied (they arrive as `steer`
   // events). FIFO match so duplicate texts reconcile in order.
-  void _reconcileQueued(List<Map<String, dynamic>> events) {
-    if (_queued.isEmpty) return;
-    final applied = <String>[];
-    for (final e in events) {
-      if (e['kind'] == 'steer') applied.add(e['text']?.toString() ?? '');
-    }
-    final remaining = <String>[];
-    for (final q in _queued) {
-      final i = applied.indexOf(q);
-      if (i >= 0) {
-        applied.removeAt(i);
-      } else {
-        remaining.add(q);
-      }
-    }
-    _queued
-      ..clear()
-      ..addAll(remaining);
+  // Display label for a held message — hide the verbose image marker.
+  String _queuedLabel(String m) {
+    if (m.startsWith('[attached image')) return '🖼 image';
+    final i = m.indexOf('\n\n[attached image');
+    return i >= 0 ? '${m.substring(0, i)}  🖼' : m;
   }
 
   void _toast(String m) {
@@ -313,7 +311,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
                       if (running) ...[const SizedBox(height: 12), const _TypingDots()],
                       if (_queued.isNotEmpty) ...[
                         const SizedBox(height: 12),
-                        for (final q in _queued) _QueuedBubble(text: q, onCancel: _cancelQueued),
+                        for (final q in _queued) _QueuedBubble(text: _queuedLabel(q), onCancel: _cancelQueued),
                       ],
                       if (waiting && _pendingApproval(events)) ...[const SizedBox(height: 12), _ApprovalBar(onSend: _send)]
                       else if (waiting && s.pendingQuestion != null) ...[const SizedBox(height: 12), _QuestionBar(question: s.pendingQuestion!, onSend: _send)],
