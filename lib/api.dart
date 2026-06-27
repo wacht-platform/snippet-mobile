@@ -34,13 +34,22 @@ class DaemonClient {
     }
   }
 
-  Future<List<SessionInfo>> sessions() async {
-    final r = await http.get(_uri('/sessions'));
+  Future<List<SessionInfo>> sessions({String? folder}) async {
+    final r = await http.get(_uri('/sessions', folder == null ? null : {'folder': folder}));
     if (r.statusCode != 200) throw _err('list sessions', r);
     final list = jsonDecode(r.body) as List;
     return list
         .map((e) => SessionInfo.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// {folder: session count} across the device — for per-folder badges without
+  /// downloading the whole session list.
+  Future<Map<String, int>> sessionCounts() async {
+    final r = await http.get(_uri('/sessions/counts'));
+    if (r.statusCode != 200) throw _err('session counts', r);
+    return (jsonDecode(r.body) as Map<String, dynamic>)
+        .map((k, v) => MapEntry(k, (v as num).toInt()));
   }
 
   Future<FsListing> fs(String? path) async {

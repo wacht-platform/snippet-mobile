@@ -46,19 +46,21 @@ class _FolderScreenState extends State<FolderScreen> with SingleTickerProviderSt
       _error = null;
     });
     try {
-      final results = await Future.wait([widget.client.fs(widget.path), widget.client.sessions()]);
+      // Resolve the folder first, then fetch only THIS folder's sessions + the
+      // device-wide counts map (for subfolder badges) — never the full list.
+      final fs = await widget.client.fs(widget.path);
+      final results = await Future.wait([
+        widget.client.sessions(folder: fs.path),
+        widget.client.sessionCounts(),
+      ]);
       if (!mounted) return;
-      final fs = results[0] as FsListing;
-      final all = results[1] as List<SessionInfo>;
-      final here = all.where((s) => s.folder == fs.path).toList()
-        ..sort((a, b) => b.lastActive.compareTo(a.lastActive));
+      final here = (results[0] as List<SessionInfo>)..sort((a, b) => b.lastActive.compareTo(a.lastActive));
       setState(() {
         _fs = fs;
         _sessions = here;
+        _counts = results[1] as Map<String, int>;
         _loading = false;
       });
-      // Cache all sessions for subfolder badges.
-      _allSessions = all;
       // Sessions first when the folder has any, else the file browser.
       if (initial) {
         _tabs.index = here.isNotEmpty ? 0 : 1;
@@ -73,11 +75,15 @@ class _FolderScreenState extends State<FolderScreen> with SingleTickerProviderSt
     }
   }
 
-  List<SessionInfo> _allSessions = const [];
+  Map<String, int> _counts = const {};
 
   int _sessionsUnder(String dirPath) {
     final p = '$dirPath/';
-    return _allSessions.where((s) => s.folder == dirPath || s.folder.startsWith(p)).length;
+    var n = 0;
+    _counts.forEach((folder, c) {
+      if (folder == dirPath || folder.startsWith(p)) n += c;
+    });
+    return n;
   }
 
   String _pill(String status) => switch (status) {
