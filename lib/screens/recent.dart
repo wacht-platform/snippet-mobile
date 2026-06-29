@@ -155,7 +155,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
       child: Row(children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: sans(12.5, height: 1.25, color: AppColors.fg1)),
+            Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(12.5, height: 1.25, color: AppColors.fg1)),
             const SizedBox(height: 3),
             Row(children: [
               const AppIcon('folder', size: 10, color: AppColors.fg4),

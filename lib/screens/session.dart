@@ -385,67 +385,76 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   }
 
   Widget _menu(HarnessState? s) {
-    final approval = (s?.approvalMode ?? 'auto') == 'auto' ? 'Auto' : 'Ask';
-    PopupMenuItem<String> item(String v, String icon, String label, {String? value, bool divider = false}) {
-      return PopupMenuItem<String>(
-        value: v,
-        height: 40,
-        child: Row(children: [
-          AppIcon(icon, size: 16, color: AppColors.fg2),
-          const SizedBox(width: 10),
-          Expanded(child: Text(label, style: sans(13, color: AppColors.fg1))),
-          if (value != null) Text(value, style: mono(11.5, color: AppColors.fg3)),
-        ]),
-      );
+    return IconBtn('more-vertical', tooltip: 'Actions', onTap: () => _openActions(s));
+  }
+
+  void _openActions(HarnessState? s) {
+    final manual = (s?.approvalMode ?? 'auto') == 'manual';
+    final ws = s?.workspace ?? '';
+    void run(VoidCallback f) {
+      Navigator.pop(context);
+      f();
     }
 
-    return PopupMenuButton<String>(
-      color: AppColors.surface2,
-      elevation: 12,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.md), side: const BorderSide(color: AppColors.border2)),
-      icon: const AppIcon('more-vertical', color: AppColors.fg2),
-      onSelected: (v) {
-        switch (v) {
-          case 'model':
-            _switchModel();
-          case 'compact':
-            _send({'kind': 'compact'});
-            _toast('Compacting history');
-          case 'git':
-            presentScreen(context, builder: (_, close) => GitScreen(
-              client: widget.client, sessionId: widget.sessionId, onClose: close,
-            ));
-          case 'files':
-            final ws = s?.workspace ?? '';
-            final name = ws.split('/').where((p) => p.isNotEmpty).lastOrNull ?? 'Files';
-            presentScreen(context, builder: (_, close) => FileExplorer(
-              client: widget.client, title: name, start: ws.isEmpty ? null : ws, onClose: close,
-            ));
-          case 'exec':
-            _showExec();
-          case 'mode':
-            final manual = (s?.approvalMode ?? 'auto') == 'manual';
-            _send({'kind': 'set_mode', 'value': manual ? 'auto' : 'manual'});
-            _toast(manual ? 'Approval: auto' : 'Approval: ask');
-          case 'rename':
-            _renameCurrent();
-          case 'usage':
-            _showUsage();
-          case 'checkpoints':
-            _showCheckpoints();
-        }
-      },
-      itemBuilder: (_) => [
-        item('model', 'cpu', 'Switch model', value: _modelLabel),
-        item('rename', 'edit', 'Rename session'),
-        item('git', 'git-branch', 'Git'),
-        item('files', 'folder', 'Open files'),
-        item('compact', 'minimize', 'Compact history'),
-        item('exec', 'terminal', 'Run command'),
-        item('mode', 'shield', 'Approval mode', value: approval),
-        item('usage', 'activity', 'Usage'),
-        item('checkpoints', 'history', 'Checkpoints'),
+    showAppSheet(context, title: 'Actions', child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionLabel('Session'),
+        _actionTile('cpu', 'Switch model', value: _modelLabel, onTap: () => run(_switchModel)),
+        _actionTile('edit', 'Rename session', onTap: () => run(_renameCurrent)),
+        _actionTile('shield', 'Approval mode', value: manual ? 'Ask' : 'Auto', onTap: () => run(() {
+          _send({'kind': 'set_mode', 'value': manual ? 'auto' : 'manual'});
+          _toast(manual ? 'Approval: auto' : 'Approval: ask');
+        })),
+        const SizedBox(height: 12),
+        const SectionLabel('Workspace'),
+        _actionTile('git-branch', 'Git', onTap: () => run(() => presentScreen(context,
+            builder: (_, close) => GitScreen(client: widget.client, sessionId: widget.sessionId, onClose: close)))),
+        _actionTile('folder', 'Open files', onTap: () => run(() {
+          final name = ws.split('/').where((p) => p.isNotEmpty).lastOrNull ?? 'Files';
+          presentScreen(context, builder: (_, close) => FileExplorer(client: widget.client, title: name, start: ws.isEmpty ? null : ws, onClose: close));
+        })),
+        _actionTile('terminal', 'Run command', onTap: () => run(_showExec)),
+        const SizedBox(height: 12),
+        const SectionLabel('History'),
+        _actionTile('minimize', 'Compact history', onTap: () => run(() {
+          _send({'kind': 'compact'});
+          _toast('Compacting history');
+        })),
+        _actionTile('history', 'Checkpoints', onTap: () => run(_showCheckpoints)),
+        _actionTile('activity', 'Usage', onTap: () => run(_showUsage)),
+        const SizedBox(height: 4),
       ],
+    ));
+  }
+
+  Widget _actionTile(String icon, String label, {String? value, required VoidCallback onTap}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(R.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(R.md),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: Row(children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: AppColors.surface3, borderRadius: BorderRadius.circular(R.sm)),
+                child: AppIcon(icon, size: 15, color: AppColors.fg2),
+              ),
+              const SizedBox(width: 11),
+              Expanded(child: Text(label, style: sans(13, color: AppColors.fg1))),
+              if (value != null) Text(value, style: mono(11, color: AppColors.fg3)),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 

@@ -227,7 +227,7 @@ class _FolderScreenState extends State<FolderScreen> with SingleTickerProviderSt
         const AppIcon('layers', size: 14, color: AppColors.fg3),
         const SizedBox(width: 9),
         Expanded(
-          child: Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: sans(12.5, height: 1.25, color: AppColors.fg1)),
+          child: Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(12.5, height: 1.25, color: AppColors.fg1)),
         ),
         const SizedBox(width: 6),
         StatusPill(status: _pill(s.status)),
