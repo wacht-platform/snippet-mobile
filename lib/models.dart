@@ -263,3 +263,59 @@ String fmtSi(int v) {
   if (v >= 1000) return '${(v / 1000).toStringAsFixed(v >= 10000 ? 0 : 1)}k';
   return '$v';
 }
+
+// ---- git ----
+
+class GitFile {
+  final String path;
+  final String? orig; // rename source
+  final String x; // staged (index) status char
+  final String y; // unstaged (worktree) status char
+  final bool staged;
+  final bool unstaged;
+  final bool untracked;
+  GitFile.fromJson(Map<String, dynamic> j)
+      : path = j['path'] as String? ?? '',
+        orig = j['orig'] as String?,
+        x = j['x'] as String? ?? ' ',
+        y = j['y'] as String? ?? ' ',
+        staged = j['staged'] as bool? ?? false,
+        unstaged = j['unstaged'] as bool? ?? false,
+        untracked = j['untracked'] as bool? ?? false;
+}
+
+class GitStatus {
+  final bool ok;
+  final String branch;
+  final String? upstream;
+  final int ahead;
+  final int behind;
+  final bool clean;
+  final String? error;
+  final List<GitFile> files;
+  GitStatus.fromJson(Map<String, dynamic> j)
+      : ok = j['ok'] as bool? ?? false,
+        branch = j['branch'] as String? ?? '',
+        upstream = j['upstream'] as String?,
+        ahead = (j['ahead'] as num?)?.toInt() ?? 0,
+        behind = (j['behind'] as num?)?.toInt() ?? 0,
+        clean = j['clean'] as bool? ?? true,
+        error = j['error'] as String?,
+        files = ((j['files'] as List?) ?? const [])
+            .map((e) => GitFile.fromJson(e as Map<String, dynamic>))
+            .toList();
+
+  List<GitFile> get staged => files.where((f) => f.staged).toList();
+  List<GitFile> get changed => files.where((f) => f.unstaged && !f.untracked).toList();
+  List<GitFile> get untracked => files.where((f) => f.untracked).toList();
+}
+
+class GitCommit {
+  final String hash, short, author, date, subject;
+  GitCommit.fromJson(Map<String, dynamic> j)
+      : hash = j['hash'] as String? ?? '',
+        short = j['short'] as String? ?? '',
+        author = j['author'] as String? ?? '',
+        date = j['date'] as String? ?? '',
+        subject = j['subject'] as String? ?? '';
+}

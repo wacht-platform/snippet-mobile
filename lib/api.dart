@@ -182,6 +182,62 @@ class DaemonClient {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
+  // ---- git (server-side, scoped to a session's workspace) ----
+
+  Future<Map<String, dynamic>> _gitPost(String op, Map<String, dynamic> body) async {
+    final r = await http.post(_uri('/git/$op'), headers: _json, body: jsonEncode(body));
+    if (r.statusCode != 200) throw _err('git $op', r);
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
+  Future<GitStatus> gitStatus(String session) async =>
+      GitStatus.fromJson(await _gitPost('status', {'session': session}));
+
+  Future<String> gitDiff(String session, {String? file, bool staged = false}) async {
+    final d = await _gitPost('diff', {
+      'session': session,
+      if (file != null) 'file': file,
+      'staged': staged,
+    });
+    return d['patch'] as String? ?? '';
+  }
+
+  Future<List<GitCommit>> gitLog(String session, {int limit = 50}) async {
+    final d = await _gitPost('log', {'session': session, 'limit': limit});
+    return ((d['commits'] as List?) ?? [])
+        .map((e) => GitCommit.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Returns (current branch, all local branches).
+  Future<(String, List<String>)> gitBranches(String session) async {
+    final d = await _gitPost('branches', {'session': session});
+    return (
+      d['current'] as String? ?? '',
+      ((d['branches'] as List?) ?? const []).map((e) => e as String).toList(),
+    );
+  }
+
+  Future<Map<String, dynamic>> gitStage(String session,
+          {List<String>? paths, bool all = false}) =>
+      _gitPost('stage', {'session': session, if (paths != null) 'paths': paths, 'all': all});
+
+  Future<Map<String, dynamic>> gitUnstage(String session, {List<String>? paths}) =>
+      _gitPost('unstage', {'session': session, if (paths != null) 'paths': paths});
+
+  Future<Map<String, dynamic>> gitCommit(String session, String message, {bool amend = false}) =>
+      _gitPost('commit', {'session': session, 'message': message, 'amend': amend});
+
+  Future<Map<String, dynamic>> gitCheckout(String session, String target, {bool create = false}) =>
+      _gitPost('checkout', {'session': session, 'target': target, 'create': create});
+
+  Future<Map<String, dynamic>> gitPush(String session) => _gitPost('push', {'session': session});
+
+  Future<Map<String, dynamic>> gitPull(String session) => _gitPost('pull', {'session': session});
+
+  Future<Map<String, dynamic>> gitStash(String session, String op) =>
+      _gitPost('stash', {'session': session, 'op': op});
+
   String _err(String what, http.Response r) =>
       'Failed to $what (HTTP ${r.statusCode})${r.body.isNotEmpty ? ': ${r.body}' : ''}';
 }

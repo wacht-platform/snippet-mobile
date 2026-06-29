@@ -12,6 +12,7 @@ import '../notifications.dart';
 import '../theme.dart';
 import '../tool_views.dart';
 import '../widgets.dart';
+import 'git.dart';
 
 class SessionScreen extends StatefulWidget {
   final DaemonClient client;
@@ -404,6 +405,10 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           case 'compact':
             _send({'kind': 'compact'});
             _toast('Compacting history');
+          case 'git':
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => GitScreen(client: widget.client, sessionId: widget.sessionId),
+            ));
           case 'exec':
             _showExec();
           case 'mode':
@@ -421,6 +426,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       itemBuilder: (_) => [
         item('model', 'cpu', 'Switch model', value: _modelLabel),
         item('rename', 'edit', 'Rename session'),
+        item('git', 'git-branch', 'Git'),
         item('compact', 'minimize', 'Compact history'),
         item('exec', 'terminal', 'Run command'),
         item('mode', 'shield', 'Approval mode', value: approval),
