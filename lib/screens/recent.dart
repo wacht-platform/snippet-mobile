@@ -135,9 +135,9 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                   );
                 }
                 return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
                   itemCount: list.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, __) => const SizedBox(height: 6),
                   itemBuilder: (_, i) => _row(list[i]),
                 );
               },
@@ -151,26 +151,26 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
   Widget _row(SessionInfo s) {
     return AppCard(
       onTap: () => _open(s),
-      padding: const EdgeInsets.fromLTRB(13, 11, 6, 11),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
       child: Row(children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: sans(13.5, height: 1.3, color: AppColors.fg1)),
-            const SizedBox(height: 5),
+            Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: sans(12.5, height: 1.25, color: AppColors.fg1)),
+            const SizedBox(height: 3),
             Row(children: [
-              const AppIcon('folder', size: 11, color: AppColors.fg4),
+              const AppIcon('folder', size: 10, color: AppColors.fg4),
               const SizedBox(width: 5),
-              Flexible(child: Text(_folderName(s.folder), maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(10.5, color: AppColors.fg3))),
+              Flexible(child: Text(_folderName(s.folder), maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(10, color: AppColors.fg3))),
               if (_ago(s.lastActive).isNotEmpty) ...[
-                Text('  ·  ${_ago(s.lastActive)}', style: mono(10.5, color: AppColors.fg4)),
+                Text('  ·  ${_ago(s.lastActive)}', style: mono(10, color: AppColors.fg4)),
               ],
             ]),
           ]),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         StatusPill(status: _pill(s.status)),
-        IconBtn('edit', size: 34, iconSize: 15, onTap: () => _rename(s)),
-        IconBtn('trash', size: 34, iconSize: 16, onTap: () => _delete(s)),
+        IconBtn('edit', size: 30, iconSize: 14, onTap: () => _rename(s)),
+        IconBtn('trash', size: 30, iconSize: 15, onTap: () => _delete(s)),
       ]),
     );
   }

@@ -206,9 +206,9 @@ class _FolderScreenState extends State<FolderScreen> with SingleTickerProviderSt
         child: _sessions.isEmpty
             ? EmptyState(icon: 'layers', title: 'No sessions here', body: 'Start an agent session in this folder.')
             : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
                 itemCount: _sessions.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                separatorBuilder: (_, __) => const SizedBox(height: 5),
                 itemBuilder: (_, i) => _sessionRow(_sessions[i]),
               ),
       ),
@@ -222,17 +222,17 @@ class _FolderScreenState extends State<FolderScreen> with SingleTickerProviderSt
   Widget _sessionRow(SessionInfo s) {
     return AppCard(
       onTap: () => _openSession(s),
-      padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+      padding: const EdgeInsets.fromLTRB(11, 8, 4, 8),
       child: Row(children: [
-        const AppIcon('layers', size: 16, color: AppColors.fg3),
-        const SizedBox(width: 10),
+        const AppIcon('layers', size: 14, color: AppColors.fg3),
+        const SizedBox(width: 9),
         Expanded(
-          child: Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: sans(13, height: 1.3, color: AppColors.fg1)),
+          child: Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: sans(12.5, height: 1.25, color: AppColors.fg1)),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         StatusPill(status: _pill(s.status)),
-        IconBtn('edit', size: 34, iconSize: 15, onTap: () => _renameSession(s)),
-        IconBtn('trash', size: 34, iconSize: 16, onTap: () => _deleteSession(s)),
+        IconBtn('edit', size: 30, iconSize: 14, onTap: () => _renameSession(s)),
+        IconBtn('trash', size: 30, iconSize: 15, onTap: () => _deleteSession(s)),
       ]),
     );
   }
