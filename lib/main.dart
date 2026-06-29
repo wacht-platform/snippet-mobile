@@ -3,7 +3,8 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'api.dart';
 import 'notifications.dart';
-import 'screens/instances.dart';
+import 'platform.dart';
+import 'screens/adaptive_home.dart';
 import 'screens/session.dart';
 import 'theme.dart';
 
@@ -11,19 +12,22 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initNotifications();
-  onNotifTap = (m) {
-    final nav = navigatorKey.currentState;
-    if (nav == null) return;
-    nav.push(MaterialPageRoute(
-      builder: (_) => SessionScreen(
-        client: DaemonClient('${m['url']}', '${m['token']}'),
-        sessionId: '${m['session'] ?? ''}',
-        title: '${m['title'] ?? 'session'}',
-      ),
-    ));
-  };
-  await resumeWatchingIfEnabled();
+  // Foreground service + notifications are mobile-only plugins (no desktop support).
+  if (kMobile) {
+    await initNotifications();
+    onNotifTap = (m) {
+      final nav = navigatorKey.currentState;
+      if (nav == null) return;
+      nav.push(MaterialPageRoute(
+        builder: (_) => SessionScreen(
+          client: DaemonClient('${m['url']}', '${m['token']}'),
+          sessionId: '${m['session'] ?? ''}',
+          title: '${m['title'] ?? 'session'}',
+        ),
+      ));
+    };
+    await resumeWatchingIfEnabled();
+  }
   runApp(const SnippetApp());
 }
 
@@ -38,7 +42,7 @@ class _SnippetAppState extends State<SnippetApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    reportForeground(true);
+    if (kMobile) reportForeground(true);
   }
 
   @override
@@ -49,6 +53,7 @@ class _SnippetAppState extends State<SnippetApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!kMobile) return;
     final fg = state == AppLifecycleState.resumed;
     reportForeground(fg);
     if (!fg) reportOpenSession('');
@@ -61,7 +66,7 @@ class _SnippetAppState extends State<SnippetApp> with WidgetsBindingObserver {
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      home: const WithForegroundTask(child: InstancesScreen()),
+      home: kMobile ? const WithForegroundTask(child: AdaptiveHome()) : const AdaptiveHome(),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:re_editor/re_editor.dart';
 import '../api.dart';
 import '../highlight.dart';
 import '../models.dart';
+import '../panel.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'editor.dart';
@@ -14,7 +15,8 @@ class FileExplorer extends StatefulWidget {
   final DaemonClient client;
   final String title;
   final String? start; // initial folder (null = the daemon's home dir)
-  const FileExplorer({super.key, required this.client, this.title = 'Files', this.start});
+  final VoidCallback? onClose; // dismiss when hosted in a desktop panel
+  const FileExplorer({super.key, required this.client, this.title = 'Files', this.start, this.onClose});
   @override
   State<FileExplorer> createState() => _FileExplorerState();
 }
@@ -46,7 +48,7 @@ class _FileExplorerState extends State<FileExplorer> {
             final listing = snap.data;
             final segs = (listing?.path ?? '').split('/').where((s) => s.isNotEmpty).toList();
             return Column(children: [
-              SnAppBar(title: widget.title, subtitle: listing?.path, onBack: () => Navigator.pop(context)),
+              SnAppBar(title: widget.title, subtitle: listing?.path, onBack: widget.onClose ?? () => Navigator.pop(context)),
               if (segs.isNotEmpty)
                 Container(
                   height: 40,
@@ -188,9 +190,11 @@ class _FileViewerState extends State<FileViewer> {
         bottom: false,
         child: Column(children: [
           SnAppBar(title: widget.name, subtitle: widget.path, onBack: () => Navigator.pop(context), actions: [
-            IconBtn('edit', tooltip: 'Edit', onTap: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => EditorScreen(client: widget.client, path: widget.path, name: widget.name),
-            )).then((_) => _load())),
+            IconBtn('edit', tooltip: 'Edit', onTap: () => presentScreen(context,
+              style: PanelStyle.dialog,
+              dismissible: false,
+              builder: (_, close) => EditorScreen(client: widget.client, path: widget.path, name: widget.name, onClose: close),
+            ).then((_) => _load())),
           ]),
           if (_loading)
             const Expanded(child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))))

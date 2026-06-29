@@ -14,7 +14,8 @@ class EditorScreen extends StatefulWidget {
   final DaemonClient client;
   final String path;
   final String name;
-  const EditorScreen({super.key, required this.client, required this.path, required this.name});
+  final VoidCallback? onClose; // dismiss when hosted in a desktop panel
+  const EditorScreen({super.key, required this.client, required this.path, required this.name, this.onClose});
   @override
   State<EditorScreen> createState() => _EditorScreenState();
 }
@@ -129,9 +130,11 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
+  void _exit() => (widget.onClose ?? () => Navigator.pop(context))();
+
   Future<void> _maybePop() async {
     if (!_dirty) {
-      if (mounted) Navigator.pop(context);
+      _exit();
       return;
     }
     final discard = await showAppSheet<bool>(context, title: 'Discard changes?', child: Column(
@@ -145,7 +148,7 @@ class _EditorScreenState extends State<EditorScreen> {
         Btn('Keep editing', variant: BtnVariant.secondary, onTap: () => Navigator.pop(context, false)),
       ],
     ));
-    if (discard == true && mounted) Navigator.pop(context);
+    if (discard == true && mounted) _exit();
   }
 
   @override

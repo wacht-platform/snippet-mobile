@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'models.dart';
+import 'platform.dart';
 import 'store.dart';
 
 const _fgChannel = 'snippet_fg';
@@ -32,6 +33,7 @@ Uri eventsUri(String baseUrl, String token) {
 // Main-isolate setup: foreground-task config + tap routing + launch handling.
 // ---------------------------------------------------------------------------
 Future<void> initNotifications() async {
+  if (!kMobile) return; // foreground task / local notifications are mobile-only
   FlutterForegroundTask.initCommunicationPort();
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
@@ -77,12 +79,14 @@ void _route(String payload) {
 }
 
 Future<bool> notificationsEnabled() async {
+  if (!kMobile) return false;
   final sp = await SharedPreferences.getInstance();
   return sp.getBool(_prefEnabled) ?? false;
 }
 
 /// Enable/disable background watching. Returns an error string, or null on success.
 Future<String?> setNotificationsEnabled(bool on) async {
+  if (!kMobile) return 'Background watching is mobile-only.';
   final sp = await SharedPreferences.getInstance();
   await sp.setBool(_prefEnabled, on);
   if (!on) {
@@ -94,6 +98,7 @@ Future<String?> setNotificationsEnabled(bool on) async {
 
 /// Start the foreground watcher (idempotent). Returns an error string or null.
 Future<String?> startWatching() async {
+  if (!kMobile) return 'Background watching is mobile-only.';
   var perm = await FlutterForegroundTask.checkNotificationPermission();
   if (perm != NotificationPermission.granted) {
     perm = await FlutterForegroundTask.requestNotificationPermission();
@@ -120,6 +125,7 @@ Future<String?> startWatching() async {
 
 /// Resume the watcher on app launch if the user had it enabled.
 Future<void> resumeWatchingIfEnabled() async {
+  if (!kMobile) return;
   if (await notificationsEnabled()) {
     await startWatching();
   }

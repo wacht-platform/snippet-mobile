@@ -12,7 +12,9 @@ import '../widgets.dart';
 class GitScreen extends StatefulWidget {
   final DaemonClient client;
   final String sessionId;
-  const GitScreen({super.key, required this.client, required this.sessionId});
+  /// When hosted in a desktop panel, dismisses the panel from the root bar.
+  final VoidCallback? onClose;
+  const GitScreen({super.key, required this.client, required this.sessionId, this.onClose});
   @override
   State<GitScreen> createState() => _GitScreenState();
 }
@@ -152,7 +154,7 @@ class _GitScreenState extends State<GitScreen> {
           SnAppBar(
             title: 'Git',
             subtitle: st != null && st.ok ? st.branch : null,
-            onBack: () => Navigator.pop(context),
+            onBack: widget.onClose ?? () => Navigator.pop(context),
             actions: [IconBtn('refresh', onTap: _busy ? null : _load)],
           ),
           if (_busy)

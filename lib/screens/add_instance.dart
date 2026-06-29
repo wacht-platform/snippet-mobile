@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../api.dart';
 import '../models.dart';
+import '../platform.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
@@ -25,12 +26,15 @@ class _AddInstanceScreenState extends State<AddInstanceScreen> with WidgetsBindi
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    Permission.camera.request().then((s) => mounted ? setState(() => _perm = s) : null);
+    if (kMobile) {
+      Permission.camera.request().then((s) => mounted ? setState(() => _perm = s) : null);
+    }
     _paste.addListener(() => setState(() {}));
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!kMobile) return;
     if (state == AppLifecycleState.resumed) {
       Permission.camera.status.then((s) => (mounted && s != _perm) ? setState(() => _perm = s) : null);
     }
@@ -97,6 +101,21 @@ class _AddInstanceScreenState extends State<AddInstanceScreen> with WidgetsBindi
   }
 
   Widget _scanArea() {
+    if (!kMobile) {
+      // No camera/QR on desktop — paste a connection string below.
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 56, height: 56, decoration: BoxDecoration(color: AppColors.surface2, border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(16)), child: const AppIcon('clipboard', size: 24, color: AppColors.fg3)),
+            const SizedBox(height: 12),
+            Text('Add a connection', style: sans(15, weight: FontWeight.w600, color: AppColors.fg1)),
+            const SizedBox(height: 8),
+            ConstrainedBox(constraints: const BoxConstraints(maxWidth: 300), child: Text('Paste your snippet serve URL + token below (the connection string printed by `snippet serve`).', textAlign: TextAlign.center, style: sans(12.5, height: 1.5, color: AppColors.fg3))),
+          ]),
+        ),
+      );
+    }
     final perm = _perm;
     if (perm == null) {
       return const ColoredBox(color: Color(0xFF111111), child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))));

@@ -11,6 +11,7 @@ import '../models.dart';
 import '../notifications.dart';
 import '../theme.dart';
 import '../tool_views.dart';
+import '../panel.dart';
 import '../widgets.dart';
 import 'files.dart';
 import 'git.dart';
@@ -20,7 +21,10 @@ class SessionScreen extends StatefulWidget {
   final String sessionId;
   final String title;
   final String? profile;
-  const SessionScreen({super.key, required this.client, required this.sessionId, required this.title, this.profile});
+  /// True when shown as the main pane of the desktop shell (hides its own
+  /// back/home chrome — navigation lives in the sidebar).
+  final bool embedded;
+  const SessionScreen({super.key, required this.client, required this.sessionId, required this.title, this.profile, this.embedded = false});
   @override
   State<SessionScreen> createState() => _SessionScreenState();
 }
@@ -326,9 +330,10 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           SnAppBar(
             title: _title.isEmpty ? 'session' : _title,
             subtitle: s != null && s.workspace.isNotEmpty ? s.workspace : null,
-            onBack: () => Navigator.pop(context),
+            onBack: widget.embedded ? null : () => Navigator.pop(context),
             actions: [
-              IconBtn('home', tooltip: 'Instances', onTap: () => Navigator.popUntil(context, (r) => r.isFirst)),
+              if (!widget.embedded)
+                IconBtn('home', tooltip: 'Instances', onTap: () => Navigator.popUntil(context, (r) => r.isFirst)),
               if (running) IconBtn('stop', tooltip: 'Stop', onTap: () => _send({'kind': 'interrupt'})),
               _menu(s),
             ],
@@ -407,14 +412,14 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             _send({'kind': 'compact'});
             _toast('Compacting history');
           case 'git':
-            Navigator.push(context, MaterialPageRoute(
-              builder: (_) => GitScreen(client: widget.client, sessionId: widget.sessionId),
+            presentScreen(context, builder: (_, close) => GitScreen(
+              client: widget.client, sessionId: widget.sessionId, onClose: close,
             ));
           case 'files':
             final ws = s?.workspace ?? '';
             final name = ws.split('/').where((p) => p.isNotEmpty).lastOrNull ?? 'Files';
-            Navigator.push(context, MaterialPageRoute(
-              builder: (_) => FileExplorer(client: widget.client, title: name, start: ws.isEmpty ? null : ws),
+            presentScreen(context, builder: (_, close) => FileExplorer(
+              client: widget.client, title: name, start: ws.isEmpty ? null : ws, onClose: close,
             ));
           case 'exec':
             _showExec();

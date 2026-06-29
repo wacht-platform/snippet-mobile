@@ -7,7 +7,8 @@ import '../widgets.dart';
 
 class FolderBrowser extends StatefulWidget {
   final DaemonClient client;
-  const FolderBrowser({super.key, required this.client});
+  final bool newConversation; // start a fresh conversation in the chosen folder
+  const FolderBrowser({super.key, required this.client, this.newConversation = false});
   @override
   State<FolderBrowser> createState() => _FolderBrowserState();
 }
@@ -27,7 +28,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
   Future<void> _open(String folder) async {
     setState(() => _opening = true);
     try {
-      final id = await widget.client.openSession(folder);
+      final id = await widget.client.openSession(folder, newConversation: widget.newConversation);
       if (mounted) Navigator.pop(context, id);
     } catch (e) {
       if (mounted) {
