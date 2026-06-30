@@ -14,6 +14,7 @@ import '../platform.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'editor.dart';
+import 'git.dart';
 
 /// Standalone file browser — navigate folders and view file contents on a
 /// connected machine without opening an agent session.
@@ -141,6 +142,13 @@ class _FileExplorerState extends State<FileExplorer> {
         builder: (_, close) => FileViewer(client: widget.client, path: e.path, name: e.name, onClose: close),
       );
 
+  // Git for the current folder directly — no session required (the daemon runs
+  // git in that directory; non-repos show a "No git here" message).
+  void _openGit(String dir) => presentScreen(
+        context,
+        builder: (_, close) => GitScreen(client: widget.client, folder: dir, onClose: close),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -162,6 +170,7 @@ class _FileExplorerState extends State<FileExplorer> {
                         IconBtn('x', tooltip: 'Cancel', onTap: _exitSelect),
                       ]
                     : [
+                        if (listing != null) IconBtn('git-branch', tooltip: 'Git', onTap: () => _openGit(listing.path)),
                         if (listing != null) IconBtn('upload', tooltip: 'Upload files', onTap: _busy != null ? null : () => _upload(listing.path)),
                         if (listing != null) IconBtn('folder-plus', tooltip: 'New folder', onTap: _busy != null ? null : () => _newFolder(listing.path)),
                       ],

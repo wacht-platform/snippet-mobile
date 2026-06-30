@@ -12,14 +12,19 @@ import '../widgets.dart';
 class GitScreen extends StatefulWidget {
   final DaemonClient client;
   final String sessionId;
+  /// When set, git runs against this folder directly (no session needed) — used
+  /// from the file explorer. Takes precedence over [sessionId].
+  final String? folder;
   /// When hosted in a desktop panel, dismisses the panel from the root bar.
   final VoidCallback? onClose;
-  const GitScreen({super.key, required this.client, required this.sessionId, this.onClose});
+  const GitScreen({super.key, required this.client, this.sessionId = '', this.folder, this.onClose});
   @override
   State<GitScreen> createState() => _GitScreenState();
 }
 
 class _GitScreenState extends State<GitScreen> {
+  // The git endpoints accept either a session id or a folder path.
+  String get _repo => (widget.folder != null && widget.folder!.isNotEmpty) ? widget.folder! : widget.sessionId;
   GitStatus? _st;
   bool _loading = true;
   bool _busy = false;
@@ -37,7 +42,7 @@ class _GitScreenState extends State<GitScreen> {
       _error = null;
     });
     try {
-      final st = await widget.client.gitStatus(widget.sessionId);
+      final st = await widget.client.gitStatus(_repo);
       if (!mounted) return;
       setState(() {
         _st = st;
@@ -83,14 +88,14 @@ class _GitScreenState extends State<GitScreen> {
     final msg = await promptText(context,
         title: 'Commit', hint: 'Commit message', saveLabel: 'Commit');
     if (msg == null || msg.trim().isEmpty) return;
-    await _op(() => widget.client.gitCommit(widget.sessionId, msg.trim()), okMsg: 'Committed');
+    await _op(() => widget.client.gitCommit(_repo, msg.trim()), okMsg: 'Committed');
   }
 
   void _openDiff(GitFile f) {
     Navigator.push(context, MaterialPageRoute(
       builder: (_) => _DiffView(
         client: widget.client,
-        sessionId: widget.sessionId,
+        sessionId: _repo,
         file: f.path,
         staged: f.staged && !f.unstaged, // staged-only files show the index diff
         untracked: f.untracked,
@@ -101,7 +106,7 @@ class _GitScreenState extends State<GitScreen> {
   Future<void> _branchSheet() async {
     (String, List<String>) data;
     try {
-      data = await widget.client.gitBranches(widget.sessionId);
+      data = await widget.client.gitBranches(_repo);
     } catch (e) {
       _toast('$e');
       return;
@@ -120,7 +125,7 @@ class _GitScreenState extends State<GitScreen> {
                     ? null
                     : () {
                         Navigator.pop(context);
-                        _op(() => widget.client.gitCheckout(widget.sessionId, b),
+                        _op(() => widget.client.gitCheckout(_repo, b),
                             okMsg: 'Switched to $b');
                       },
                 child: Row(children: [
@@ -136,7 +141,7 @@ class _GitScreenState extends State<GitScreen> {
           Navigator.pop(context);
           final name = await promptText(context, title: 'New branch', hint: 'branch name', saveLabel: 'Create');
           if (name == null || name.trim().isEmpty) return;
-          await _op(() => widget.client.gitCheckout(widget.sessionId, name.trim(), create: true),
+          await _op(() => widget.client.gitCheckout(_repo, name.trim(), create: true),
               okMsg: 'Created ${name.trim()}');
         }),
         const SizedBox(height: 8),
@@ -180,17 +185,17 @@ class _GitScreenState extends State<GitScreen> {
                 padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
                 children: [
                   if (st.staged.isNotEmpty) ...[
-                    _sectionHeader('Staged (${st.staged.length})', trailing: 'Unstage all', onTrailing: () => _op(() => widget.client.gitUnstage(widget.sessionId))),
+                    _sectionHeader('Staged (${st.staged.length})', trailing: 'Unstage all', onTrailing: () => _op(() => widget.client.gitUnstage(_repo))),
                     ...st.staged.map((f) => _fileRow(f, staged: true)),
                     const SizedBox(height: 8),
                   ],
                   if (st.changed.isNotEmpty) ...[
-                    _sectionHeader('Changed (${st.changed.length})', trailing: 'Stage all', onTrailing: () => _op(() => widget.client.gitStage(widget.sessionId, all: true))),
+                    _sectionHeader('Changed (${st.changed.length})', trailing: 'Stage all', onTrailing: () => _op(() => widget.client.gitStage(_repo, all: true))),
                     ...st.changed.map((f) => _fileRow(f, staged: false)),
                     const SizedBox(height: 8),
                   ],
                   if (st.untracked.isNotEmpty) ...[
-                    _sectionHeader('Untracked (${st.untracked.length})', trailing: 'Stage all', onTrailing: () => _op(() => widget.client.gitStage(widget.sessionId, all: true))),
+                    _sectionHeader('Untracked (${st.untracked.length})', trailing: 'Stage all', onTrailing: () => _op(() => widget.client.gitStage(_repo, all: true))),
                     ...st.untracked.map((f) => _fileRow(f, staged: false)),
                   ],
                 ],
@@ -229,9 +234,9 @@ class _GitScreenState extends State<GitScreen> {
         ),
         const SizedBox(height: 10),
         Row(children: [
-          Expanded(child: Btn('Pull', icon: 'refresh', small: true, variant: BtnVariant.secondary, disabled: _busy, onTap: () => _op(() => widget.client.gitPull(widget.sessionId), okMsg: 'Pulled'))),
+          Expanded(child: Btn('Pull', icon: 'refresh', small: true, variant: BtnVariant.secondary, disabled: _busy, onTap: () => _op(() => widget.client.gitPull(_repo), okMsg: 'Pulled'))),
           const SizedBox(width: 8),
-          Expanded(child: Btn('Push', iconRight: 'arrow-right', small: true, variant: BtnVariant.secondary, disabled: _busy, onTap: () => _op(() => widget.client.gitPush(widget.sessionId), okMsg: 'Pushed'))),
+          Expanded(child: Btn('Push', iconRight: 'arrow-right', small: true, variant: BtnVariant.secondary, disabled: _busy, onTap: () => _op(() => widget.client.gitPush(_repo), okMsg: 'Pushed'))),
         ]),
       ]),
     );
@@ -271,8 +276,8 @@ class _GitScreenState extends State<GitScreen> {
               onTap: _busy
                   ? null
                   : () => _op(() => staged
-                      ? widget.client.gitUnstage(widget.sessionId, paths: [f.path])
-                      : widget.client.gitStage(widget.sessionId, paths: [f.path]))),
+                      ? widget.client.gitUnstage(_repo, paths: [f.path])
+                      : widget.client.gitStage(_repo, paths: [f.path]))),
         ]),
       ),
     );
