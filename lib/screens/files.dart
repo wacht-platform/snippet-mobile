@@ -307,11 +307,10 @@ class _FileViewerState extends State<FileViewer> {
       final ext = dot > 0 ? widget.name.substring(dot + 1).toLowerCase() : '';
       // Mobile: saveFile writes the bytes directly. Desktop: bytes aren't
       // supported — it returns the chosen path and we write the file ourselves.
+      // (Don't pass FileType.custom — it breaks the save panel on desktop.)
       final saved = await FilePicker.platform.saveFile(
         fileName: widget.name,
         bytes: kMobile ? bytes : null,
-        type: ext.isEmpty ? FileType.any : FileType.custom,
-        allowedExtensions: ext.isEmpty ? null : [ext],
       );
       if (saved != null && !kMobile) {
         // The panel can return a path missing the extension — re-append it.
