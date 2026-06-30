@@ -4,43 +4,43 @@ import 'package:iconsax_plus/iconsax_plus.dart';
 
 /// snippet — Wacht design system (dark), one electric-blue accent.
 /// Resolved dark-theme tokens from the design handoff.
-// shadcn dark (zinc + indigo). OKLCH tokens converted to sRGB.
+// Warm-neutral dark with a magenta/fuchsia accent. OKLCH tokens → sRGB.
 class AppColors {
-  static const bg = Color(0xFF09090B); // --background
-  static const surface1 = Color(0xFF18181B); // --card / --popover / --sidebar
-  static const surface2 = Color(0xFF27272A); // --secondary / --muted (inputs, chips)
-  static const surface3 = Color(0xFF37373B); // pressed / hover raise
+  static const bg = Color(0xFF0C0C09); // --background
+  static const surface1 = Color(0xFF1D1D16); // --card / --popover / --sidebar
+  static const surface2 = Color(0xFF2B2B22); // --muted (inputs, chips)
+  static const surface3 = Color(0xFF3A3A30); // pressed / hover raise
 
-  static const fg1 = Color(0xFFFAFAFA); // --foreground
-  static const fg2 = Color(0xFFCACAD1); // secondary text, icons
-  static const fg3 = Color(0xFF9F9FA9); // --muted-foreground
-  static const fg4 = Color(0xFF797981); // faint icons, disabled
+  static const fg1 = Color(0xFFFBFBF9); // --foreground
+  static const fg2 = Color(0xFFD2D2C9); // secondary text, icons
+  static const fg3 = Color(0xFFABAB9C); // --muted-foreground
+  static const fg4 = Color(0xFF818172); // faint icons, disabled
 
   static const border = Color(0x1AFFFFFF); // --border (white 10%)
   static const border2 = Color(0x26FFFFFF); // --input (white 15%)
 
-  // Indigo accent (bright for a dark UI): fills carry dark text.
-  static const accent = Color(0xFF8D98FF);
-  static const accentHover = Color(0xFFA6ADFF);
-  static const accentFg = Color(0xFF0C0A1F);
-  static const accentBg = Color(0x288D98FF); // ~16%
-  static const accentLine = Color(0x668D98FF); // 40%
-  static const accentRing = Color(0x4D8D98FF); // 30%
+  // Magenta accent (bright for a dark UI): fills carry dark text.
+  static const accent = Color(0xFFCB41D8);
+  static const accentHover = Color(0xFFE05FED);
+  static const accentFg = Color(0xFF210D23);
+  static const accentBg = Color(0x28CB41D8); // ~16%
+  static const accentLine = Color(0x66CB41D8); // 40%
+  static const accentRing = Color(0x4DCB41D8); // 30%
 
-  // Status (on-theme: indigo, no green); red for errors.
-  static const ok = Color(0xFF8D98FF);
-  static const okBg = Color(0x288D98FF);
-  static const run = Color(0xFFA6ADFF);
-  static const runBg = Color(0x26A6ADFF);
+  // Status (on-theme: magenta, no green); red for errors.
+  static const ok = Color(0xFFCB41D8);
+  static const okBg = Color(0x28CB41D8);
+  static const run = Color(0xFFE05FED);
+  static const runBg = Color(0x26E05FED);
   static const danger = Color(0xFFFF6467); // --destructive
   static const dangerBg = Color(0x26FF6467);
 
-  // diff line tints — additions indigo (no green), deletions red.
-  static const diffAddBg = Color(0x208D98FF);
+  // diff line tints — additions magenta (no green), deletions red.
+  static const diffAddBg = Color(0x20CB41D8);
   static const diffDelBg = Color(0x20FF6467);
-  static const diffAddFg = Color(0xFF8D98FF);
-  static const diffDelFg = Color(0xFFFF9492);
-  static const diffGutter = Color(0xFF52525B);
+  static const diffAddFg = Color(0xFFED9BF4);
+  static const diffDelFg = Color(0xFFFF9B98);
+  static const diffGutter = Color(0xFF52524A);
 }
 
 // Rounder throughout (soft, modern).
@@ -120,108 +120,108 @@ TextTheme _allRegular(TextTheme t) {
   );
 }
 
-/// Map the app's icon names to the Iconsax Bold (filled) set — solid, no outline.
+/// Map the app's icon names to Iconsax (linear) — outlined, borderless variants.
 IconData iconFor(String name) {
   switch (name) {
     case 'chevron-left':
-      return IconsaxPlusBold.arrow_left_1;
+      return IconsaxPlusLinear.arrow_left_1;
     case 'chevron-right':
-      return IconsaxPlusBold.arrow_right_2;
+      return IconsaxPlusLinear.arrow_right_2;
     case 'chevron-down':
-      return IconsaxPlusBold.arrow_down_2;
+      return IconsaxPlusLinear.arrow_down_2;
     case 'chevron-up':
-      return IconsaxPlusBold.arrow_up_2;
+      return IconsaxPlusLinear.arrow_up_2;
     case 'arrow-right':
-      return IconsaxPlusBold.arrow_right_3;
+      return IconsaxPlusLinear.arrow_right_3;
     case 'plus':
-      return IconsaxPlusBold.add;
+      return IconsaxPlusLinear.add;
     case 'x':
-      return IconsaxPlusBold.close_square;
+      return Icons.close_rounded;
     case 'more-vertical':
-      return IconsaxPlusBold.more;
+      return IconsaxPlusLinear.more;
     case 'search':
-      return IconsaxPlusBold.search_normal_1;
+      return IconsaxPlusLinear.search_normal_1;
     case 'settings':
-      return IconsaxPlusBold.setting_2;
+      return IconsaxPlusLinear.setting_2;
     case 'sliders':
-      return IconsaxPlusBold.setting_4;
+      return IconsaxPlusLinear.setting_4;
     case 'wifi-off':
-      return IconsaxPlusBold.wifi_square;
+      return IconsaxPlusLinear.wifi;
     case 'refresh':
-      return IconsaxPlusBold.refresh_2;
+      return IconsaxPlusLinear.refresh_2;
     case 'alert-triangle':
-      return IconsaxPlusBold.warning_2;
+      return IconsaxPlusLinear.warning_2;
     case 'check':
-      return IconsaxPlusBold.tick_square;
+      return Icons.check_rounded;
     case 'check-check':
-      return IconsaxPlusBold.tick_circle;
+      return Icons.done_all_rounded;
     case 'stop':
-      return IconsaxPlusBold.stop;
+      return IconsaxPlusLinear.stop;
     case 'send':
-      return IconsaxPlusBold.arrow_up_3;
+      return IconsaxPlusLinear.arrow_up_3;
     case 'shield':
-      return IconsaxPlusBold.shield_tick;
+      return IconsaxPlusLinear.shield_tick;
     case 'folder':
-      return IconsaxPlusBold.folder_2;
+      return IconsaxPlusLinear.folder_2;
     case 'folder-open':
-      return IconsaxPlusBold.folder_open;
+      return IconsaxPlusLinear.folder_open;
     case 'file':
-      return IconsaxPlusBold.document_text;
+      return IconsaxPlusLinear.document_text;
     case 'git-branch':
-      return IconsaxPlusBold.hierarchy;
+      return IconsaxPlusLinear.hierarchy;
     case 'terminal':
-      return IconsaxPlusBold.code;
+      return IconsaxPlusLinear.code;
     case 'grip':
-      return IconsaxPlusBold.menu;
+      return IconsaxPlusLinear.menu;
     case 'edit':
-      return IconsaxPlusBold.edit_2;
+      return IconsaxPlusLinear.edit_2;
     case 'trash':
-      return IconsaxPlusBold.trash;
+      return IconsaxPlusLinear.trash;
     case 'key':
-      return IconsaxPlusBold.key;
+      return IconsaxPlusLinear.key;
     case 'cpu':
-      return IconsaxPlusBold.cpu;
+      return IconsaxPlusLinear.cpu;
     case 'layers':
-      return IconsaxPlusBold.layer;
+      return IconsaxPlusLinear.layer;
     case 'activity':
-      return IconsaxPlusBold.activity;
+      return IconsaxPlusLinear.activity;
     case 'image':
-      return IconsaxPlusBold.gallery;
+      return IconsaxPlusLinear.gallery;
     case 'scan':
-      return IconsaxPlusBold.scan;
+      return IconsaxPlusLinear.scan;
     case 'camera':
-      return IconsaxPlusBold.camera;
+      return IconsaxPlusLinear.camera;
     case 'camera-off':
-      return IconsaxPlusBold.camera_slash;
+      return IconsaxPlusLinear.camera_slash;
     case 'clipboard':
-      return IconsaxPlusBold.clipboard_text;
+      return IconsaxPlusLinear.clipboard_text;
     case 'history':
-      return IconsaxPlusBold.timer_1;
+      return IconsaxPlusLinear.timer_1;
     case 'zap':
-      return IconsaxPlusBold.flash_1;
+      return IconsaxPlusLinear.flash_1;
     case 'minimize':
-      return IconsaxPlusBold.minus;
+      return IconsaxPlusLinear.minus;
     case 'rotate':
-      return IconsaxPlusBold.rotate_left;
+      return IconsaxPlusLinear.rotate_left;
     case 'globe':
-      return IconsaxPlusBold.global;
+      return IconsaxPlusLinear.global;
     case 'map':
-      return IconsaxPlusBold.map;
+      return IconsaxPlusLinear.map;
     case 'list':
-      return IconsaxPlusBold.task_square;
+      return IconsaxPlusLinear.menu;
     case 'file-plus':
-      return IconsaxPlusBold.document_upload;
+      return IconsaxPlusLinear.document_upload;
     case 'corner-down-right':
-      return IconsaxPlusBold.direct_right;
+      return IconsaxPlusLinear.direct_right;
     case 'home':
-      return IconsaxPlusBold.home_2;
+      return IconsaxPlusLinear.home_2;
     case 'clock':
-      return IconsaxPlusBold.clock;
+      return IconsaxPlusLinear.clock;
     case 'sidebar':
-      return IconsaxPlusBold.menu;
+      return IconsaxPlusLinear.menu;
     case 'menu':
-      return IconsaxPlusBold.menu;
+      return IconsaxPlusLinear.menu;
     default:
-      return IconsaxPlusBold.element_3;
+      return IconsaxPlusLinear.element_3;
   }
 }

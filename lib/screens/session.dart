@@ -406,12 +406,13 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         color: AppColors.bg,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: Row(children: [
+      // Align the toolbar with the centered chat column (title left, actions right).
+      child: _centerWide(Row(children: [
         if (widget.onMenu != null) ...[
           IconBtn('sidebar', size: 30, iconSize: 16, tooltip: 'Sidebar', onTap: widget.onMenu),
           const SizedBox(width: 4),
         ] else
-          const SizedBox(width: 4),
+          const SizedBox(width: 2),
         Flexible(
           child: Text(_title.isEmpty ? 'session' : _title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(13.5, color: AppColors.fg1)),
         ),
@@ -424,7 +425,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         const Spacer(),
         if (running) IconBtn('stop', size: 30, iconSize: 16, tooltip: 'Stop', onTap: () => _send({'kind': 'interrupt'})),
         _menu(s),
-      ]),
+      ])),
     );
   }
 
@@ -577,13 +578,13 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     return Container(
       height: 38,
       decoration: const BoxDecoration(color: AppColors.surface1, border: Border(bottom: BorderSide(color: AppColors.border))),
-      child: SingleChildScrollView(
+      child: _centerWide(SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         child: Row(children: [
           for (var i = 0; i < chips.length; i++) ...[if (i > 0) const SizedBox(width: 12), chips[i]],
         ]),
-      ),
+      )),
     );
   }
 
