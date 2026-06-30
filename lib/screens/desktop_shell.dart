@@ -113,6 +113,10 @@ class _DesktopShellState extends State<DesktopShell> {
         body: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))),
       );
     }
+    // A full-width strip at the top reserves room for the macOS window controls
+    // (and is draggable to move the window) — applied uniformly so everything
+    // below clears them.
+    final topStrip = kMacOS ? const SizedBox(height: kMacTitlebar) : const SizedBox.shrink();
     return LayoutBuilder(builder: (context, c) {
       // Narrow window → keep the native shell but collapse the sidebar to a drawer.
       if (c.maxWidth < kShellCompact) {
@@ -122,25 +126,35 @@ class _DesktopShellState extends State<DesktopShell> {
           drawerEdgeDragWidth: 24,
           drawer: Drawer(
             width: 300,
-            backgroundColor: AppColors.surface1,
+            backgroundColor: AppColors.bg,
             shape: const RoundedRectangleBorder(),
-            child: SafeArea(child: _sidebar(onAfterPick: () => _scaffoldKey.currentState?.closeDrawer())),
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(top: kMacOS ? kMacTitlebar : 0),
+                child: _sidebar(onAfterPick: () => _scaffoldKey.currentState?.closeDrawer()),
+              ),
+            ),
           ),
           body: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.only(top: kMacOS ? kMacTitlebar : 0),
-              child: _mainPane(onMenu: () => _scaffoldKey.currentState?.openDrawer()),
-            ),
+            child: Column(children: [
+              topStrip,
+              Expanded(child: _mainPane(onMenu: () => _scaffoldKey.currentState?.openDrawer())),
+            ]),
           ),
         );
       }
       return Scaffold(
         backgroundColor: AppColors.bg,
         body: SafeArea(
-          child: Row(children: [
-            SizedBox(width: 300, child: _sidebar()),
-            const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
-            Expanded(child: _mainPane()),
+          child: Column(children: [
+            topStrip,
+            Expanded(
+              child: Row(children: [
+                SizedBox(width: 300, child: _sidebar()),
+                const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
+                Expanded(child: _mainPane()),
+              ]),
+            ),
           ]),
         ),
       );
@@ -436,9 +450,8 @@ class _SidebarState extends State<_Sidebar> {
   Widget build(BuildContext context) {
     final hasClient = widget.client != null;
     return Container(
-      color: AppColors.surface1, // subtle panel shade distinct from the main pane
+      color: AppColors.bg, // sidebar is the darkest surface; chat canvas is lighter
       child: Column(children: [
-        if (kMacOS) const SizedBox(height: kMacTitlebar), // clear the window controls
         const SizedBox(height: 6),
         _navRow('edit', 'New chat', onTap: hasClient ? _newSession : null),
         _navRow('search', 'Search', onTap: hasClient ? _openSearch : null),

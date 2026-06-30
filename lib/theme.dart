@@ -6,7 +6,8 @@ import 'package:iconsax_plus/iconsax_plus.dart';
 /// Resolved dark-theme tokens from the design handoff.
 // Warm-neutral dark with a magenta/fuchsia accent. OKLCH tokens → sRGB.
 class AppColors {
-  static const bg = Color(0xFF0C0C09); // --background
+  static const bg = Color(0xFF0C0C09); // --background (sidebar / shell)
+  static const canvas = Color(0xFF26251D); // chat reading area (lighter than bg)
   static const surface1 = Color(0xFF1D1D16); // --card / --popover / --sidebar
   static const surface2 = Color(0xFF2B2B22); // --muted (inputs, chips)
   static const surface3 = Color(0xFF3A3A30); // pressed / hover raise

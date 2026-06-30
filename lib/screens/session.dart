@@ -328,6 +328,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     final events = s?.events ?? const [];
     final items = _transcript(events);
     return Scaffold(
+      backgroundColor: widget.embedded ? AppColors.canvas : null,
       body: SafeArea(
         bottom: false,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -403,11 +404,11 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: const BoxDecoration(
-        color: AppColors.bg,
+        color: AppColors.canvas,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      // Align the toolbar with the centered chat column (title left, actions right).
-      child: _centerWide(Row(children: [
+      // Full-width toolbar: title at the left, actions at the right edge.
+      child: Row(children: [
         if (widget.onMenu != null) ...[
           IconBtn('sidebar', size: 30, iconSize: 16, tooltip: 'Sidebar', onTap: widget.onMenu),
           const SizedBox(width: 4),
@@ -425,7 +426,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         const Spacer(),
         if (running) IconBtn('stop', size: 30, iconSize: 16, tooltip: 'Stop', onTap: () => _send({'kind': 'interrupt'})),
         _menu(s),
-      ])),
+      ]),
     );
   }
 
@@ -578,13 +579,13 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     return Container(
       height: 38,
       decoration: const BoxDecoration(color: AppColors.surface1, border: Border(bottom: BorderSide(color: AppColors.border))),
-      child: _centerWide(SingleChildScrollView(
+      child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(children: [
           for (var i = 0; i < chips.length; i++) ...[if (i > 0) const SizedBox(width: 12), chips[i]],
         ]),
-      )),
+      ),
     );
   }
 
