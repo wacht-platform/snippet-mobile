@@ -43,6 +43,39 @@ class _DesktopShellState extends State<DesktopShell> {
   void initState() {
     super.initState();
     _loadInstances();
+    // Tapping a session notification opens it in-place (consistent with the app),
+    // not a separate full-screen route.
+    if (kCanNotify) onNotifTap = _onNotif;
+  }
+
+  @override
+  void dispose() {
+    if (onNotifTap == _onNotif) onNotifTap = null;
+    super.dispose();
+  }
+
+  void _onNotif(Map<String, dynamic> m) {
+    if (!mounted) return;
+    final url = '${m['url']}';
+    final token = '${m['token']}';
+    final sid = '${m['session'] ?? ''}';
+    if (url.isEmpty || sid.isEmpty) return;
+    Instance? inst;
+    for (final i in _instances) {
+      if (i.url == url) {
+        inst = i;
+        break;
+      }
+    }
+    setState(() {
+      _active = inst;
+      _client = DaemonClient(url, token);
+      _sessionId = sid;
+      _sessionTitle = '${m['title'] ?? 'session'}';
+      _sessionProfile = null;
+      _sessions = null;
+    });
+    _loadSessions();
   }
 
   Future<void> _loadInstances() async {
@@ -549,6 +582,15 @@ class _SidebarState extends State<_Sidebar> {
     );
   }
 
+  // The sidebar/drawer reads bigger on phones than on desktop.
+  double get _navText => kMobile ? 15.5 : 13;
+  double get _navIcon => kMobile ? 20 : 16;
+  double get _navPadV => kMobile ? 12 : 8;
+  double get _projText => kMobile ? 13.5 : 12;
+  double get _rowTitle => kMobile ? 14.5 : 12.5;
+  double get _rowTime => kMobile ? 11.5 : 10;
+  double get _rowPadV => kMobile ? 11 : 6;
+
   Widget _navRow(String icon, String label, {VoidCallback? onTap, bool active = false}) {
     return Material(
       color: active ? AppColors.accentBg : Colors.transparent,
@@ -557,11 +599,11 @@ class _SidebarState extends State<_Sidebar> {
         child: Opacity(
           opacity: onTap == null ? 0.45 : 1,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+            padding: EdgeInsets.fromLTRB(14, _navPadV, 14, _navPadV),
             child: Row(children: [
-              AppIcon(icon, size: 16, color: AppColors.fg2),
+              AppIcon(icon, size: _navIcon, color: AppColors.fg2),
               const SizedBox(width: 11),
-              Text(label, style: sans(13, color: AppColors.fg1)),
+              Text(label, style: sans(_navText, color: AppColors.fg1)),
             ]),
           ),
         ),
@@ -611,9 +653,9 @@ class _SidebarState extends State<_Sidebar> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 6, 3),
       child: Row(children: [
-        const AppIcon('layers', size: 13, color: AppColors.fg3),
+        AppIcon('layers', size: kMobile ? 15 : 13, color: AppColors.fg3),
         const SizedBox(width: 8),
-        Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(12, color: AppColors.fg2))),
+        Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(_projText, color: AppColors.fg2))),
       ]),
     );
   }
@@ -630,15 +672,15 @@ class _SidebarState extends State<_Sidebar> {
         onLongPress: () => _sessionActions(s),
         onSecondaryTap: () => _sessionActions(s),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 6, 8, 6),
+          padding: EdgeInsets.fromLTRB(kMobile ? 16 : 20, _rowPadV, 8, _rowPadV),
           child: Row(children: [
             if (running) ...[
-              Container(width: 5, height: 5, decoration: const BoxDecoration(color: AppColors.fg1, shape: BoxShape.circle)),
-              const SizedBox(width: 7),
+              Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppColors.fg1, shape: BoxShape.circle)),
+              const SizedBox(width: 8),
             ],
-            Expanded(child: Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(12.5, color: selected ? AppColors.fg1 : AppColors.fg2))),
+            Expanded(child: Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(_rowTitle, color: selected ? AppColors.fg1 : AppColors.fg2))),
             const SizedBox(width: 6),
-            Text(_ago(s.lastActive), style: mono(10, color: AppColors.fg4)),
+            Text(_ago(s.lastActive), style: mono(_rowTime, color: AppColors.fg4)),
           ]),
         ),
       ),

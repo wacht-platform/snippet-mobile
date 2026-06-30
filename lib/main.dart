@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import 'api.dart';
 import 'notifications.dart';
 import 'platform.dart';
 import 'screens/adaptive_home.dart';
-import 'screens/session.dart';
 import 'theme.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -13,20 +11,10 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Notifications: foreground service on mobile, in-process /events watcher on
-  // desktop (macOS/Linux). Both deliver the same session alerts.
+  // desktop (macOS/Linux). Tapping one is handled by the shell (it opens the
+  // session in-place), so there's no separate full-screen route.
   if (kCanNotify) {
     await initNotifications();
-    onNotifTap = (m) {
-      final nav = navigatorKey.currentState;
-      if (nav == null) return;
-      nav.push(MaterialPageRoute(
-        builder: (_) => SessionScreen(
-          client: DaemonClient('${m['url']}', '${m['token']}'),
-          sessionId: '${m['session'] ?? ''}',
-          title: '${m['title'] ?? 'session'}',
-        ),
-      ));
-    };
     await resumeWatchingIfEnabled();
   }
   runApp(const SnippetApp());
