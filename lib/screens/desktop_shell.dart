@@ -103,7 +103,18 @@ class _DesktopShellState extends State<DesktopShell> {
         },
         onInstanceAdded: _onInstanceAdded,
         onRemoveInstance: _removeInstance,
+        onSessionDeleted: _onSessionDeleted,
       );
+
+  void _onSessionDeleted(String id) {
+    if (_sessionId == id) {
+      setState(() {
+        _sessionId = null;
+        _sessionTitle = '';
+        _sessionProfile = null;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -337,6 +348,7 @@ class _Sidebar extends StatefulWidget {
   final void Function(String id, String title, String? profile) onOpenSession;
   final void Function(Instance) onInstanceAdded;
   final void Function(Instance) onRemoveInstance;
+  final void Function(String id) onSessionDeleted;
   const _Sidebar({
     required this.instances,
     required this.active,
@@ -346,6 +358,7 @@ class _Sidebar extends StatefulWidget {
     required this.onOpenSession,
     required this.onInstanceAdded,
     required this.onRemoveInstance,
+    required this.onSessionDeleted,
   });
   @override
   State<_Sidebar> createState() => _SidebarState();
@@ -562,6 +575,8 @@ class _SidebarState extends State<_Sidebar> {
       child: InkWell(
         borderRadius: BorderRadius.circular(R.sm),
         onTap: () => widget.onOpenSession(s.id, s.title, s.profile),
+        onLongPress: () => _sessionActions(s),
+        onSecondaryTap: () => _sessionActions(s),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 6, 8, 6),
           child: Row(children: [
@@ -576,6 +591,85 @@ class _SidebarState extends State<_Sidebar> {
         ),
       ),
     );
+  }
+
+  // Long-press / right-click a session → rename or delete.
+  void _sessionActions(SessionInfo s) {
+    showAppSheet(context, title: s.title.isEmpty ? '(untitled)' : s.title, child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sessionActionTile('edit', 'Rename', onTap: () {
+          Navigator.pop(context);
+          _renameSession(s);
+        }),
+        _sessionActionTile('trash', 'Delete', danger: true, onTap: () {
+          Navigator.pop(context);
+          _confirmDeleteSession(s);
+        }),
+      ],
+    ));
+  }
+
+  Widget _sessionActionTile(String icon, String label, {required VoidCallback onTap, bool danger = false}) {
+    final color = danger ? AppColors.danger : AppColors.fg1;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(R.sm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(R.sm),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 13),
+          child: Row(children: [
+            AppIcon(icon, size: 16, color: color),
+            const SizedBox(width: 12),
+            Text(label, style: sans(13.5, color: color)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _renameSession(SessionInfo s) async {
+    final c = widget.client;
+    if (c == null) return;
+    final title = await promptText(context, title: 'Rename session', initial: s.title, hint: 'New title', saveLabel: 'Rename');
+    if (title == null) return;
+    try {
+      await c.renameSession(s.id, title);
+      _load();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _confirmDeleteSession(SessionInfo s) async {
+    final c = widget.client;
+    if (c == null) return;
+    final ok = await showAppSheet<bool>(context, title: 'Delete session?', child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(s.title.isEmpty ? '(untitled session)' : s.title, style: sans(13.5, color: AppColors.fg1)),
+        const SizedBox(height: 6),
+        Text('Permanently removes the conversation. The folder and its files are untouched.', style: sans(12, height: 1.45, color: AppColors.fg3)),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: Btn('Cancel', variant: BtnVariant.secondary, onTap: () => Navigator.pop(context, false))),
+          const SizedBox(width: 10),
+          Expanded(child: Btn('Delete', variant: BtnVariant.danger, icon: 'trash', onTap: () => Navigator.pop(context, true))),
+        ]),
+      ],
+    ));
+    if (ok != true) return;
+    try {
+      await c.deleteSession(s.id);
+      widget.onSessionDeleted(s.id);
+      _load();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 
   Widget _footer() {
