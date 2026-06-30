@@ -34,6 +34,10 @@ class _DesktopShellState extends State<DesktopShell> {
   String _sessionTitle = '';
   String? _sessionProfile;
   bool _loading = true;
+  // Session list lives here (not in the sidebar) so it survives drawer open/close
+  // and is shared with the "recent sessions" placeholder.
+  List<SessionInfo>? _sessions;
+  bool _sessionsLoading = false;
 
   @override
   void initState() {
@@ -50,6 +54,36 @@ class _DesktopShellState extends State<DesktopShell> {
       _client = _active != null ? DaemonClient(_active!.url, _active!.token) : null;
       _loading = false;
     });
+    _loadSessions();
+  }
+
+  Future<void> _loadSessions() async {
+    final c = _client;
+    if (c == null) {
+      setState(() => _sessions = const []);
+      return;
+    }
+    setState(() => _sessionsLoading = true);
+    try {
+      final s = await c.sessions(limit: 60);
+      s.sort((a, b) => b.lastActive.compareTo(a.lastActive));
+      if (mounted) setState(() { _sessions = s; _sessionsLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _sessionsLoading = false);
+    }
+  }
+
+  Future<void> _newSessionFlow() async {
+    final c = _client;
+    if (c == null) return;
+    final id = await presentScreen<String>(
+      context,
+      builder: (_, close) => FolderBrowser(client: c, newConversation: true),
+    );
+    if (id != null) {
+      _openSession(id, 'New session', null);
+      _loadSessions();
+    }
   }
 
   void _selectInstance(Instance inst) {
@@ -57,7 +91,9 @@ class _DesktopShellState extends State<DesktopShell> {
       _active = inst;
       _client = DaemonClient(inst.url, inst.token);
       _sessionId = null;
+      _sessions = null;
     });
+    _loadSessions();
   }
 
   void _openSession(String id, String title, String? profile) {
@@ -96,6 +132,13 @@ class _DesktopShellState extends State<DesktopShell> {
         active: _active,
         client: _client,
         selectedSessionId: _sessionId,
+        sessions: _sessions,
+        sessionsLoading: _sessionsLoading,
+        onRefreshSessions: _loadSessions,
+        onNewSession: () {
+          _newSessionFlow();
+          onAfterPick?.call();
+        },
         onSelectInstance: _selectInstance,
         onOpenSession: (id, title, profile) {
           _openSession(id, title, profile);
@@ -114,6 +157,7 @@ class _DesktopShellState extends State<DesktopShell> {
         _sessionProfile = null;
       });
     }
+    _loadSessions();
   }
 
   @override
@@ -127,12 +171,14 @@ class _DesktopShellState extends State<DesktopShell> {
     return LayoutBuilder(builder: (context, c) {
       // Narrow window → keep the native shell but collapse the sidebar to a drawer.
       if (c.maxWidth < kShellCompact) {
+        // Wider drawer on phones; capped so it doesn't swallow the whole screen.
+        final drawerW = (c.maxWidth * 0.86).clamp(280.0, 360.0);
         return Scaffold(
           key: _scaffoldKey,
           backgroundColor: AppColors.canvas,
           drawerEdgeDragWidth: 24,
           drawer: Drawer(
-            width: 300,
+            width: drawerW,
             backgroundColor: AppColors.canvas,
             shape: const RoundedRectangleBorder(),
             child: SafeArea(child: _sidebar(onAfterPick: () => _scaffoldKey.currentState?.closeDrawer())),
@@ -168,7 +214,7 @@ class _DesktopShellState extends State<DesktopShell> {
       return _withMenu(onMenu, _welcome());
     }
     if (_sessionId == null) {
-      return _withMenu(onMenu, const Center(child: EmptyState(icon: 'layers', title: 'No session selected', body: 'Pick a session on the left, or start a new one.')));
+      return _withMenu(onMenu, _recentPlaceholder());
     }
     // Pane-scoped MediaQuery so window-width sizing (chat bubbles) fits the pane.
     return LayoutBuilder(builder: (ctx, c) {
@@ -186,6 +232,61 @@ class _DesktopShellState extends State<DesktopShell> {
         ),
       );
     });
+  }
+
+  // No session selected → recent sessions + a New chat button (instead of a bare
+  // "nothing selected" message).
+  Widget _recentPlaceholder() {
+    final sessions = (_sessions ?? const <SessionInfo>[]).take(8).toList();
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+          children: [
+            Text('Recent sessions', style: sans(15, color: AppColors.fg1)),
+            const SizedBox(height: 4),
+            Text('Pick up where you left off, or start a new chat.', style: sans(12.5, height: 1.4, color: AppColors.fg3)),
+            const SizedBox(height: 16),
+            Btn('New chat', icon: 'edit', full: true, onTap: _newSessionFlow),
+            const SizedBox(height: 12),
+            if (_sessionsLoading && _sessions == null)
+              const Center(child: Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))))
+            else if (sessions.isEmpty)
+              Padding(padding: const EdgeInsets.symmetric(vertical: 16), child: Text('No sessions yet.', style: sans(12.5, color: AppColors.fg4)))
+            else
+              ...sessions.map((s) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: AppCard(
+                      onTap: () => _openSession(s.id, s.title, s.profile),
+                      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+                      child: Row(children: [
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(13, color: AppColors.fg1)),
+                            const SizedBox(height: 2),
+                            Text(s.folder.split('/').where((p) => p.isNotEmpty).lastOrNull ?? s.folder, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(10.5, color: AppColors.fg4)),
+                          ]),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(_ago(s.lastActive), style: mono(10, color: AppColors.fg4)),
+                      ]),
+                    ),
+                  )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _ago(int unixSec) {
+    if (unixSec == 0) return '';
+    final d = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(unixSec * 1000));
+    if (d.inMinutes < 60) return '${d.inMinutes < 1 ? 1 : d.inMinutes}m';
+    if (d.inHours < 24) return '${d.inHours}h';
+    if (d.inDays < 30) return '${d.inDays}d';
+    return '${(d.inDays / 30).floor()}mo';
   }
 
   // When collapsed, overlay a sidebar-toggle on the welcome/empty states.
@@ -344,6 +445,10 @@ class _Sidebar extends StatefulWidget {
   final Instance? active;
   final DaemonClient? client;
   final String? selectedSessionId;
+  final List<SessionInfo>? sessions;
+  final bool sessionsLoading;
+  final VoidCallback onRefreshSessions;
+  final VoidCallback onNewSession;
   final void Function(Instance) onSelectInstance;
   final void Function(String id, String title, String? profile) onOpenSession;
   final void Function(Instance) onInstanceAdded;
@@ -354,6 +459,10 @@ class _Sidebar extends StatefulWidget {
     required this.active,
     required this.client,
     required this.selectedSessionId,
+    required this.sessions,
+    required this.sessionsLoading,
+    required this.onRefreshSessions,
+    required this.onNewSession,
     required this.onSelectInstance,
     required this.onOpenSession,
     required this.onInstanceAdded,
@@ -365,16 +474,12 @@ class _Sidebar extends StatefulWidget {
 }
 
 class _SidebarState extends State<_Sidebar> {
-  List<SessionInfo>? _sessions;
-  bool _loading = false;
+  // The session list now lives in the shell (passed via widget.sessions); the
+  // sidebar is presentational, so opening the drawer doesn't refetch.
   bool _adding = false; // inline add-instance field revealed
-  String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  List<SessionInfo>? get _sessions => widget.sessions;
+  bool get _loading => widget.sessionsLoading;
 
   String _ago(int unixSec) {
     if (unixSec == 0) return '';
@@ -385,64 +490,14 @@ class _SidebarState extends State<_Sidebar> {
     return '${(d.inDays / 30).floor()}mo';
   }
 
-  @override
-  void didUpdateWidget(_Sidebar old) {
-    super.didUpdateWidget(old);
-    if (old.client?.baseUrl != widget.client?.baseUrl) _load();
-  }
-
-  Future<void> _load() async {
-    final c = widget.client;
-    if (c == null) {
-      setState(() => _sessions = const []);
-      return;
-    }
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final s = await c.sessions(limit: 60);
-      s.sort((a, b) => b.lastActive.compareTo(a.lastActive));
-      if (mounted) {
-        setState(() {
-          _sessions = s;
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = '$e';
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _newSession() async {
-    final c = widget.client;
-    if (c == null) return;
-    // FolderBrowser pops with the new session id; in a drawer that value flows
-    // back through presentScreen.
-    final id = await presentScreen<String>(
-      context,
-      builder: (_, close) => FolderBrowser(client: c, newConversation: true),
-    );
-    if (id != null) {
-      widget.onOpenSession(id, 'New session', null);
-      _load();
-    }
-  }
-
   void _openSearch() {
     showCommandPalette(
       context,
       sessions: _sessions ?? const [],
       onOpenChat: (s) => widget.onOpenSession(s.id, s.title, s.profile),
       commands: [
-        PaletteCommand('edit', 'New chat', '', _newSession),
-        PaletteCommand('folder', 'Open folder', '', _newSession),
+        PaletteCommand('edit', 'New chat', '', widget.onNewSession),
+        PaletteCommand('folder', 'Open folder', '', widget.onNewSession),
         PaletteCommand('settings', 'Settings', '', _openSettings),
       ],
     );
@@ -467,7 +522,7 @@ class _SidebarState extends State<_Sidebar> {
       color: AppColors.canvas, // same surface as the chat canvas
       child: Column(children: [
         SizedBox(height: kMacOS ? kMacTitlebar + 6 : 6), // clear the window controls
-        _navRow('edit', 'New chat', onTap: hasClient ? _newSession : null),
+        _navRow('edit', 'New chat', onTap: hasClient ? widget.onNewSession : null),
         _navRow('search', 'Search', onTap: hasClient ? _openSearch : null),
         const SizedBox(height: 4),
         Expanded(
@@ -518,9 +573,6 @@ class _SidebarState extends State<_Sidebar> {
     if (_loading && _sessions == null) {
       return const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3)));
     }
-    if (_error != null) {
-      return Padding(padding: const EdgeInsets.all(16), child: Text(_error!, style: sans(12, color: AppColors.fg3)));
-    }
     final list = _sessions ?? const <SessionInfo>[];
     if (list.isEmpty) {
       return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('No chats yet.', style: sans(12.5, color: AppColors.fg4))));
@@ -542,7 +594,7 @@ class _SidebarState extends State<_Sidebar> {
           padding: const EdgeInsets.fromLTRB(6, 6, 4, 4),
           child: Row(children: [
             const Expanded(child: SectionLabel('Projects')),
-            IconBtn('refresh', size: 26, iconSize: 13, onTap: _loading ? null : _load),
+            IconBtn('refresh', size: 26, iconSize: 13, onTap: _loading ? null : widget.onRefreshSessions),
           ]),
         ),
         for (final f in order) ...[
@@ -638,7 +690,7 @@ class _SidebarState extends State<_Sidebar> {
     if (title == null) return;
     try {
       await c.renameSession(s.id, title);
-      _load();
+      widget.onRefreshSessions();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
@@ -666,7 +718,7 @@ class _SidebarState extends State<_Sidebar> {
     try {
       await c.deleteSession(s.id);
       widget.onSessionDeleted(s.id);
-      _load();
+      widget.onRefreshSessions();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
