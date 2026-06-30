@@ -312,11 +312,11 @@ class _DesktopShellState extends State<DesktopShell> {
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(13, color: AppColors.fg1)),
                             const SizedBox(height: 2),
-                            Text(s.folder.split('/').where((p) => p.isNotEmpty).lastOrNull ?? s.folder, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(10.5, color: AppColors.fg4)),
+                            Text(lastPathSegment(s.folder, ifEmpty: s.folder), maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(10.5, color: AppColors.fg4)),
                           ]),
                         ),
                         const SizedBox(width: 8),
-                        Text(_ago(s.lastActive), style: mono(10, color: AppColors.fg4)),
+                        Text(relativeTime(s.lastActive), style: mono(10, color: AppColors.fg4)),
                       ]),
                     ),
                   )),
@@ -324,15 +324,6 @@ class _DesktopShellState extends State<DesktopShell> {
         ),
       ),
     );
-  }
-
-  String _ago(int unixSec) {
-    if (unixSec == 0) return '';
-    final d = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(unixSec * 1000));
-    if (d.inMinutes < 60) return '${d.inMinutes < 1 ? 1 : d.inMinutes}m';
-    if (d.inHours < 24) return '${d.inHours}h';
-    if (d.inDays < 30) return '${d.inDays}d';
-    return '${(d.inDays / 30).floor()}mo';
   }
 
   // When collapsed, overlay a sidebar-toggle on the welcome/empty states.
@@ -527,15 +518,6 @@ class _SidebarState extends State<_Sidebar> {
   List<SessionInfo>? get _sessions => widget.sessions;
   bool get _loading => widget.sessionsLoading;
 
-  String _ago(int unixSec) {
-    if (unixSec == 0) return '';
-    final d = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(unixSec * 1000));
-    if (d.inMinutes < 60) return '${d.inMinutes < 1 ? 1 : d.inMinutes}m';
-    if (d.inHours < 24) return '${d.inHours}h';
-    if (d.inDays < 30) return '${d.inDays}d';
-    return '${(d.inDays / 30).floor()}mo';
-  }
-
   void _openSearch() {
     showCommandPalette(
       context,
@@ -664,7 +646,7 @@ class _SidebarState extends State<_Sidebar> {
   }
 
   Widget _projectHeader(String folder) {
-    final name = folder.split('/').where((p) => p.isNotEmpty).lastOrNull ?? (folder.isEmpty ? '—' : folder);
+    final name = lastPathSegment(folder, ifEmpty: '—');
     // Show just the project name; reveal the full folder + machine on hover/long-press.
     final machine = widget.active?.label;
     final detail = machine == null || machine.isEmpty ? folder : '$folder\non $machine';
@@ -702,7 +684,7 @@ class _SidebarState extends State<_Sidebar> {
             ],
             Expanded(child: Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(_rowTitle, color: selected ? AppColors.fg1 : AppColors.fg2))),
             const SizedBox(width: 6),
-            Text(_ago(s.lastActive), style: mono(_rowTime, color: AppColors.fg4)),
+            Text(relativeTime(s.lastActive), style: mono(_rowTime, color: AppColors.fg4)),
           ]),
         ),
       ),

@@ -617,7 +617,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       const PopupMenuDivider(),
       item('git-branch', 'Git', () => presentScreen(context, builder: (_, close) => GitScreen(client: widget.client, sessionId: widget.sessionId, onClose: close))),
       item('folder', 'Open files', () {
-        final name = ws.split('/').where((p) => p.isNotEmpty).lastOrNull ?? 'Files';
+        final name = lastPathSegment(ws, ifEmpty: 'Files');
         presentScreen(context, builder: (_, close) => FileExplorer(client: widget.client, title: name, start: ws.isEmpty ? null : ws, onClose: close));
       }),
       item('terminal', 'Run command', _showExec),
@@ -655,7 +655,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         _actionTile('git-branch', 'Git', onTap: () => run(() => presentScreen(context,
             builder: (_, close) => GitScreen(client: widget.client, sessionId: widget.sessionId, onClose: close)))),
         _actionTile('folder', 'Open files', onTap: () => run(() {
-          final name = ws.split('/').where((p) => p.isNotEmpty).lastOrNull ?? 'Files';
+          final name = lastPathSegment(ws, ifEmpty: 'Files');
           presentScreen(context, builder: (_, close) => FileExplorer(client: widget.client, title: name, start: ws.isEmpty ? null : ws, onClose: close));
         })),
         _actionTile('terminal', 'Run command', onTap: () => run(_showExec)),

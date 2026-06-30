@@ -81,6 +81,55 @@ class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMi
 }
 
 /// Open a markdown link in the external browser (fire-and-forget).
+/// Compact relative time like "5m", "3h", "2d", "4mo" (empty for 0).
+String relativeTime(int unixSec) {
+  if (unixSec == 0) return '';
+  final d = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(unixSec * 1000));
+  if (d.inMinutes < 60) return '${d.inMinutes < 1 ? 1 : d.inMinutes}m';
+  if (d.inHours < 24) return '${d.inHours}h';
+  if (d.inDays < 30) return '${d.inDays}d';
+  return '${(d.inDays / 30).floor()}mo';
+}
+
+/// Human-readable byte size (B / KB / MB). Accepts an int or anything parseable.
+String formatBytes(dynamic n) {
+  final b = n is int ? n : int.tryParse(n.toString()) ?? 0;
+  if (b < 1024) return '$b B';
+  if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)} KB';
+  return '${(b / 1024 / 1024).toStringAsFixed(1)} MB';
+}
+
+/// Last non-empty path segment (the folder/file name), or [ifEmpty] when there is none.
+String lastPathSegment(String path, {String ifEmpty = ''}) {
+  final seg = path.split('/').where((p) => p.isNotEmpty).lastOrNull;
+  return seg ?? (path.isEmpty ? ifEmpty : path);
+}
+
+/// A row of selectable rounded pills. [items] maps each value to its label;
+/// [onSelect] null disables the whole row (e.g. a locked field).
+class Pills<T> extends StatelessWidget {
+  final List<(T, String)> items;
+  final T selected;
+  final ValueChanged<T>? onSelect;
+  const Pills({super.key, required this.items, required this.selected, this.onSelect});
+  @override
+  Widget build(BuildContext context) => Wrap(spacing: 7, runSpacing: 7, children: [
+        for (final (val, label) in items)
+          GestureDetector(
+            onTap: onSelect == null ? null : () => onSelect!(val),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+              decoration: BoxDecoration(
+                color: selected == val ? AppColors.accentBg : AppColors.surface2,
+                borderRadius: BorderRadius.circular(99),
+                border: Border.all(color: selected == val ? AppColors.accentLine : AppColors.border),
+              ),
+              child: Text(label, style: sans(12.5, weight: FontWeight.w500, color: selected == val ? AppColors.accent : AppColors.fg2)),
+            ),
+          ),
+      ]);
+}
+
 void openMarkdownLink(String? href) {
   if (href == null || href.isEmpty) return;
   final uri = Uri.tryParse(href);

@@ -113,24 +113,14 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
               children: [
                 Text('Provider', style: sans(12, weight: FontWeight.w500, color: AppColors.fg2)),
                 const SizedBox(height: 7),
-                Wrap(spacing: 7, runSpacing: 7, children: [
-                  for (final (val, label) in pills)
-                    GestureDetector(
-                      onTap: _isEdit ? null : () => setState(() {
+                Pills<String>(
+                  items: pills,
+                  selected: _provider,
+                  onSelect: _isEdit ? null : (val) => setState(() {
                         _provider = val;
                         _images = _defaultImages(val);
                       }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _provider == val ? AppColors.accentBg : AppColors.surface2,
-                          borderRadius: BorderRadius.circular(99),
-                          border: Border.all(color: _provider == val ? AppColors.accentLine : AppColors.border),
-                        ),
-                        child: Text(label, style: sans(12.5, weight: FontWeight.w500, color: _provider == val ? AppColors.accent : AppColors.fg2)),
-                      ),
-                    ),
-                ]),
+                ),
                 const SizedBox(height: 16),
                 if (!_isEdit) ...[
                   AppField(label: 'Profile name', controller: _name, hint: 'optional — defaults to the provider'),
@@ -153,21 +143,11 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
                 const SizedBox(height: 16),
                 Text('Reasoning effort', style: sans(12, weight: FontWeight.w500, color: AppColors.fg2)),
                 const SizedBox(height: 7),
-                Wrap(spacing: 7, runSpacing: 7, children: [
-                  for (final (val, label) in const [('', 'Default'), ('off', 'Off'), ('low', 'Low'), ('medium', 'Medium'), ('high', 'High')])
-                    GestureDetector(
-                      onTap: () => setState(() => _effort = val),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _effort == val ? AppColors.accentBg : AppColors.surface2,
-                          borderRadius: BorderRadius.circular(99),
-                          border: Border.all(color: _effort == val ? AppColors.accentLine : AppColors.border),
-                        ),
-                        child: Text(label, style: sans(12.5, weight: FontWeight.w500, color: _effort == val ? AppColors.accent : AppColors.fg2)),
-                      ),
-                    ),
-                ]),
+                Pills<String>(
+                  items: const [('', 'Default'), ('off', 'Off'), ('low', 'Low'), ('medium', 'Medium'), ('high', 'High')],
+                  selected: _effort,
+                  onSelect: (val) => setState(() => _effort = val),
+                ),
                 const SizedBox(height: 6),
                 Text("Higher means more thinking — better on hard problems, more tokens. Default uses the provider's own; Off disables reasoning. Applies to reasoning models (OpenAI/Codex, Gemini, Anthropic).",
                     style: sans(11.5, height: 1.4, color: AppColors.fg4)),

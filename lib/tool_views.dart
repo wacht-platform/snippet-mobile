@@ -268,7 +268,7 @@ List<Widget> _imageView(Map? a, Map? d) {
         if (d != null)
           _meta([
             if (d['mime'] != null) _chip('image', d['mime'].toString()),
-            if (d['size_bytes'] != null) _chip('grip', _bytes(d['size_bytes'])),
+            if (d['size_bytes'] != null) _chip('grip', formatBytes(d['size_bytes'])),
           ]),
       ]),
     ),
@@ -514,13 +514,6 @@ String _pretty(dynamic v) {
     s = v.toString();
   }
   return s.length > 6000 ? '${s.substring(0, 6000)}\n…(truncated)' : s;
-}
-
-String _bytes(dynamic n) {
-  final b = n is int ? n : int.tryParse(n.toString()) ?? 0;
-  if (b < 1024) return '$b B';
-  if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)} KB';
-  return '${(b / 1024 / 1024).toStringAsFixed(1)} MB';
 }
 
 Widget _meta(List<Widget> chips) => Wrap(spacing: 7, runSpacing: 7, children: chips);

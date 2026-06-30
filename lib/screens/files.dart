@@ -397,12 +397,6 @@ class _FileViewerState extends State<FileViewer> {
     }
   }
 
-  String _bytes(int b) {
-    if (b < 1024) return '$b B';
-    if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)} KB';
-    return '${(b / 1024 / 1024).toStringAsFixed(1)} MB';
-  }
-
   @override
   Widget build(BuildContext context) {
     final f = _f;
@@ -423,13 +417,13 @@ class _FileViewerState extends State<FileViewer> {
           else if (_error != null)
             Expanded(child: EmptyState(icon: 'alert-triangle', title: 'Failed to load', body: _error!))
           else if (f!.binary)
-            Expanded(child: EmptyState(icon: 'file', title: 'Binary file', body: '${_bytes(f.size)} — can\'t display as text.'))
+            Expanded(child: EmptyState(icon: 'file', title: 'Binary file', body: '${formatBytes(f.size)} — can\'t display as text.'))
           else ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
-              child: Text('${f.content.split('\n').length} lines · ${_bytes(f.size)}${f.truncated ? ' · truncated' : ''}',
+              child: Text('${f.content.split('\n').length} lines · ${formatBytes(f.size)}${f.truncated ? ' · truncated' : ''}',
                   style: mono(10.5, color: AppColors.fg4)),
             ),
             Expanded(

@@ -96,7 +96,7 @@ class _PaletteState extends State<_Palette> {
     super.dispose();
   }
 
-  String _proj(String folder) => folder.split('/').where((p) => p.isNotEmpty).lastOrNull ?? folder;
+  String _proj(String folder) => lastPathSegment(folder, ifEmpty: folder);
 
   @override
   Widget build(BuildContext context) {
