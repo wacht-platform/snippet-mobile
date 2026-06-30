@@ -198,6 +198,12 @@ class DaemonClient {
     throw _err('save file', r);
   }
 
+  /// Create a new directory at [path]. Throws on conflict/error.
+  Future<void> mkdir(String path) async {
+    final r = await http.post(_uri('/fs/mkdir'), headers: _json, body: jsonEncode({'path': path}));
+    if (r.statusCode != 200) throw _err('create folder', r);
+  }
+
   // ---- git (server-side, scoped to a session's workspace) ----
 
   Future<Map<String, dynamic>> _gitPost(String op, Map<String, dynamic> body) async {

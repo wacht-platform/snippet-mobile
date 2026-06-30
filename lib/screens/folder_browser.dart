@@ -25,6 +25,18 @@ class _FolderBrowserState extends State<FolderBrowser> {
 
   void _go(String? path) => setState(() { _future = widget.client.fs(path); });
 
+  Future<void> _newFolder(String cwd) async {
+    final name = await promptText(context, title: 'New folder', hint: 'Folder name', saveLabel: 'Create');
+    final trimmed = name?.trim();
+    if (trimmed == null || trimmed.isEmpty) return;
+    try {
+      await widget.client.mkdir('$cwd/$trimmed');
+      _go(cwd);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   Future<void> _open(String folder) async {
     setState(() => _opening = true);
     try {
@@ -49,7 +61,9 @@ class _FolderBrowserState extends State<FolderBrowser> {
             final listing = snap.data;
             final segs = (listing?.path ?? '').split('/').where((s) => s.isNotEmpty).toList();
             return Column(children: [
-              SnAppBar(title: 'Open folder', onBack: () => Navigator.pop(context)),
+              SnAppBar(title: 'Open folder', onBack: () => Navigator.pop(context), actions: [
+                if (listing != null) IconBtn('folder-plus', tooltip: 'New folder', onTap: () => _newFolder(listing.path)),
+              ]),
               if (listing != null)
                 Container(
                   height: 40,
