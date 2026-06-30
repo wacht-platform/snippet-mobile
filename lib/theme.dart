@@ -3,41 +3,43 @@ import 'package:google_fonts/google_fonts.dart';
 
 /// snippet — Wacht design system (dark), one electric-blue accent.
 /// Resolved dark-theme tokens from the design handoff.
-// Slate — cool blue-grey dark with a teal accent.
+// Mono — neutral black-and-white; the accent is white (no color, no slate tint).
 class AppColors {
-  static const bg = Color(0xFF0D1117); // app background
-  static const surface1 = Color(0xFF161B22); // cards, sheets, agent bubbles
-  static const surface2 = Color(0xFF1C2330); // inputs, chips, status strip
-  static const surface3 = Color(0xFF293040); // pressed / hover raise
+  static const bg = Color(0xFF0A0A0A); // app background (neutral near-black)
+  static const surface1 = Color(0xFF151515); // cards, sheets, agent bubbles
+  static const surface2 = Color(0xFF1E1E1E); // inputs, chips, status strip
+  static const surface3 = Color(0xFF2A2A2A); // pressed / hover raise
 
-  static const fg1 = Color(0xFFE6EDF3); // primary text
-  static const fg2 = Color(0xFFADBAC7); // secondary text, icons
-  static const fg3 = Color(0xFF768390); // muted / metadata / paths
-  static const fg4 = Color(0xFF545D68); // faint icons, disabled
+  static const fg1 = Color(0xFFFAFAFA); // primary text
+  static const fg2 = Color(0xFFB5B5B5); // secondary text, icons
+  static const fg3 = Color(0xFF8A8A8A); // muted / metadata / paths
+  static const fg4 = Color(0xFF5A5A5A); // faint icons, disabled
 
   static const border = Color(0x14FFFFFF); // hairline ~8%
-  static const border2 = Color(0x24FFFFFF); // hover/emphasis ~14%
+  static const border2 = Color(0x26FFFFFF); // hover/emphasis ~15%
 
-  static const accent = Color(0xFF2DD4BF); // teal
-  static const accentHover = Color(0xFF5EEAD4);
-  static const accentFg = Color(0xFF062521); // dark text on teal
-  static const accentBg = Color(0x242DD4BF); // ~14%
-  static const accentLine = Color(0x662DD4BF); // 40%
-  static const accentRing = Color(0x4D2DD4BF); // ~30%
+  // Accent is white: fills are white with black text; tints are faint white.
+  static const accent = Color(0xFFFAFAFA);
+  static const accentHover = Color(0xFFFFFFFF);
+  static const accentFg = Color(0xFF0A0A0A);
+  static const accentBg = Color(0x1FFFFFFF); // ~12%
+  static const accentLine = Color(0x40FFFFFF); // ~25%
+  static const accentRing = Color(0x33FFFFFF); // ~20%
 
-  static const ok = Color(0xFF3FB950);
-  static const okBg = Color(0x263FB950);
-  static const run = Color(0xFFD29922);
-  static const runBg = Color(0x26D29922);
-  static const danger = Color(0xFFF85149);
-  static const dangerBg = Color(0x26F85149);
+  // Status: monochrome (no green); red kept only for errors.
+  static const ok = Color(0xFFE0E0E0);
+  static const okBg = Color(0x1FFFFFFF);
+  static const run = Color(0xFFFAFAFA);
+  static const runBg = Color(0x1FFFFFFF);
+  static const danger = Color(0xFFF06560);
+  static const dangerBg = Color(0x26F06560);
 
-  // diff line tints (subtler than the *Bg chips)
-  static const diffAddBg = Color(0x203FB950);
-  static const diffDelBg = Color(0x20F85149);
-  static const diffAddFg = Color(0xFF7EE787);
-  static const diffDelFg = Color(0xFFFFA198);
-  static const diffGutter = Color(0xFF484F58);
+  // diff line tints — additions neutral (no green), deletions red.
+  static const diffAddBg = Color(0x18FFFFFF);
+  static const diffDelBg = Color(0x1FF06560);
+  static const diffAddFg = Color(0xFFE6E6E6);
+  static const diffDelFg = Color(0xFFF3A6A2);
+  static const diffGutter = Color(0xFF4A4A4A);
 }
 
 // Sharp / minimal — small radii throughout.

@@ -302,36 +302,41 @@ class _DashedBorder extends CustomPainter {
   bool shouldRepaint(covariant _DashedBorder old) => old.color != color;
 }
 
-/// One chat message — flat (no bubble/box): a small role label with a colored
-/// dot, then the content. Role is conveyed by the label + dot, not a container.
+/// One chat message — flat (no bubble/box). YOUR messages get a left accent bar
+/// + label; the agent's are plain full-width markdown under a dim label. The bar
+/// vs no-bar is the primary you/agent distinction.
 class Bubble extends StatelessWidget {
   final bool mine;
   final String text;
   const Bubble({super.key, required this.mine, required this.text});
   @override
   Widget build(BuildContext context) {
-    final roleColor = mine ? AppColors.accent : AppColors.fg2;
-    final role = mine ? 'You' : 'snippet';
+    if (mine) {
+      return IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Container(width: 2, color: AppColors.accentLine),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('YOU', style: sans(10, color: AppColors.fg1, spacing: 0.8)),
+              const SizedBox(height: 4),
+              SelectableText(text, style: sans(13.5, height: 1.5, color: AppColors.fg2)),
+            ]),
+          ),
+        ]),
+      );
+    }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Container(width: 5, height: 5, decoration: BoxDecoration(color: roleColor, shape: BoxShape.circle)),
-        const SizedBox(width: 7),
-        Text(role.toUpperCase(), style: sans(10, color: roleColor, spacing: 0.8)),
-      ]),
+      Text('SNIPPET', style: sans(10, color: AppColors.fg3, spacing: 0.8)),
       const SizedBox(height: 5),
-      Padding(
-        padding: const EdgeInsets.only(left: 12),
-        // Agent text: SelectionArea so a drag selects across all markdown blocks.
-        child: mine
-            ? SelectableText(text, style: sans(13.5, height: 1.5, color: AppColors.fg1))
-            : SelectionArea(
-                child: MarkdownBody(
-                  data: text,
-                  selectable: false,
-                  styleSheet: markdownStyle(context),
-                  onTapLink: (txt, href, title) => openMarkdownLink(href),
-                ),
-              ),
+      // SelectionArea so a drag selects across all markdown blocks at once.
+      SelectionArea(
+        child: MarkdownBody(
+          data: text,
+          selectable: false,
+          styleSheet: markdownStyle(context),
+          onTapLink: (txt, href, title) => openMarkdownLink(href),
+        ),
       ),
     ]);
   }

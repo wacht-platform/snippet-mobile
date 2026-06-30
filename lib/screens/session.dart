@@ -583,20 +583,35 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   List<Widget> _transcript(List<Map<String, dynamic>> events) {
     final out = <Widget>[];
     Map<String, dynamic>? pending;
-    void flush() {
+    final group = <Widget>[]; // consecutive tool lines, grouped together
+
+    void flushPending() {
       final p = pending;
       if (p != null) {
         final name = _s(p['tool_name']);
-        out.add(ToolLine(tool: name, icon: toolIcon(name), arg: toolArgSummary(name, p['arguments']), done: false, onTap: () => _showToolDetail(name, p['arguments'], null)));
+        group.add(ToolLine(tool: name, icon: toolIcon(name), arg: toolArgSummary(name, p['arguments']), done: false, onTap: () => _showToolDetail(name, p['arguments'], null)));
         pending = null;
       }
+    }
+
+    // Close a run of consecutive tool calls: emit a single grouped block when
+    // there are several, or just the one line when it's alone.
+    void endTools() {
+      flushPending();
+      if (group.isEmpty) return;
+      if (group.length == 1) {
+        out.add(Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: group.first));
+      } else {
+        out.add(Padding(padding: const EdgeInsets.only(top: 2, bottom: 10), child: _ToolGroup(List.of(group))));
+      }
+      group.clear();
     }
 
     for (final e in events) {
       final k = e['kind'] as String? ?? '';
       switch (k) {
         case 'tool_call':
-          flush();
+          flushPending();
           // Meta-tools render via their own events (note → note, ask_user →
           // user_question, delegate_task → lane_spawned). Skip their generic tool
           // lines so they don't double up or open a raw-JSON drawer.
@@ -607,53 +622,53 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             final p = pending;
             if (p != null) {
               final name = _s(p['tool_name']);
-              out.add(ToolLine(tool: name, icon: toolIcon(name), arg: toolArgSummary(name, p['arguments']), out: _resultStatus(e['result']), done: _ok(e['result']), onTap: () => _showToolDetail(name, p['arguments'], e['result'])));
+              group.add(ToolLine(tool: name, icon: toolIcon(name), arg: toolArgSummary(name, p['arguments']), out: _resultStatus(e['result']), done: _ok(e['result']), onTap: () => _showToolDetail(name, p['arguments'], e['result'])));
               pending = null;
             } else {
               final name = _s(e['tool_name']);
               if (_isMetaTool(name)) break;
-              out.add(ToolLine(tool: name, icon: toolIcon(name), out: _resultStatus(e['result']), done: _ok(e['result']), onTap: () => _showToolDetail(name, null, e['result'])));
+              group.add(ToolLine(tool: name, icon: toolIcon(name), out: _resultStatus(e['result']), done: _ok(e['result']), onTap: () => _showToolDetail(name, null, e['result'])));
             }
           }
         case 'user_input':
         case 'steer':
-          flush();
-          out.add(Padding(padding: const EdgeInsets.only(bottom: 12), child: Bubble(mine: true, text: _s(e['text']))));
+          endTools();
+          out.add(Padding(padding: const EdgeInsets.only(top: 2, bottom: 14), child: Bubble(mine: true, text: _s(e['text']))));
         case 'assistant_text':
-          flush();
-          out.add(Padding(padding: const EdgeInsets.only(bottom: 12), child: Bubble(mine: false, text: _s(e['text']))));
+          endTools();
+          out.add(Padding(padding: const EdgeInsets.only(top: 2, bottom: 14), child: Bubble(mine: false, text: _s(e['text']))));
         case 'model_error':
-          flush();
+          endTools();
           out.add(NoteLine(_s(e['message']), error: true));
         case 'invalid_tool_call':
-          flush();
+          endTools();
           out.add(NoteLine('invalid ${_s(e['tool_name'])}: ${_s(e['error'])}', error: true));
         case 'note':
-          flush();
+          endTools();
           final entry = _s(e['entry']);
           out.add(_NoteLine(entry, onTap: () => _showNote(entry)));
         case 'system_decision':
-          flush();
+          endTools();
           out.add(NoteLine(_s(e['reasoning'])));
         case 'lane_spawned':
-          flush();
+          endTools();
           out.add(NoteLine('lane: ${_s(e['title'])}'));
         case 'lane_completed':
-          flush();
+          endTools();
           out.add(NoteLine('lane done: ${_s(e['title'])}'));
         case 'user_question':
-          flush();
+          endTools();
           final qd = e['questions'];
           final qs = (qd is Map ? qd['questions'] : null) as List?;
           final txt = (qs != null && qs.isNotEmpty && qs.first is Map) ? _s((qs.first as Map)['text']) : '';
-          if (txt.isNotEmpty) out.add(Padding(padding: const EdgeInsets.only(bottom: 12), child: Bubble(mine: false, text: '❓ $txt')));
+          if (txt.isNotEmpty) out.add(Padding(padding: const EdgeInsets.only(top: 2, bottom: 14), child: Bubble(mine: false, text: '❓ $txt')));
         case 'approval_request':
           break; // shown by the approval bar
         default:
           break;
       }
     }
-    flush();
+    endTools();
     return out;
   }
 
@@ -956,6 +971,29 @@ class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderState
 
 /// A message sent mid-run, shown right-aligned + dimmed with a cancel (✕) until
 /// the daemon applies it (then it's replaced by the real bubble).
+/// A run of consecutive tool calls, grouped under a left rule with a small
+/// "N steps" header (boxless — just the rule).
+class _ToolGroup extends StatelessWidget {
+  final List<Widget> children;
+  const _ToolGroup(this.children);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 3, 4, 3),
+      decoration: const BoxDecoration(
+        border: Border(left: BorderSide(color: AppColors.border2, width: 2)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 3),
+          child: Text('${children.length} STEPS', style: sans(9.5, color: AppColors.fg4, spacing: 0.8)),
+        ),
+        ...children,
+      ]),
+    );
+  }
+}
+
 class _QueuedBubble extends StatelessWidget {
   final String text;
   final VoidCallback onCancel;
