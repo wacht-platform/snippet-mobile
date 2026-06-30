@@ -28,6 +28,7 @@ class _FileExplorerState extends State<FileExplorer> {
   late Future<FsListing> _future;
   bool _selecting = false;
   final Set<String> _selected = {};
+  String? _busy; // non-null while uploading/deleting (label shown in a progress strip)
 
   @override
   void initState() {
@@ -73,6 +74,7 @@ class _FileExplorerState extends State<FileExplorer> {
       ],
     ));
     if (ok != true) return;
+    if (mounted) setState(() => _busy = 'Deleting $n item${n == 1 ? '' : 's'}…');
     var failed = 0;
     for (final p in _selected.toList()) {
       try {
@@ -82,6 +84,7 @@ class _FileExplorerState extends State<FileExplorer> {
       }
     }
     if (!mounted) return;
+    setState(() => _busy = null);
     if (failed > 0) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete $failed item(s)')));
     _go(cwd); // refresh + clears selection
   }
@@ -108,8 +111,11 @@ class _FileExplorerState extends State<FileExplorer> {
       return;
     }
     if (res == null) return;
+    final files = res.files;
     var uploaded = 0;
-    for (final f in res.files) {
+    for (var i = 0; i < files.length; i++) {
+      final f = files[i];
+      if (mounted) setState(() => _busy = 'Uploading ${i + 1}/${files.length}…');
       try {
         final bytes = f.bytes ?? (f.path != null ? await File(f.path!).readAsBytes() : null);
         if (bytes == null) continue;
@@ -119,7 +125,12 @@ class _FileExplorerState extends State<FileExplorer> {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${f.name}: $e')));
       }
     }
-    if (uploaded > 0) _go(cwd);
+    if (!mounted) return;
+    setState(() => _busy = null);
+    if (uploaded > 0) {
+      _go(cwd);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Uploaded $uploaded file${uploaded == 1 ? '' : 's'}')));
+    }
   }
 
   void _openFile(FsEntry e) => presentScreen(
@@ -144,14 +155,24 @@ class _FileExplorerState extends State<FileExplorer> {
                 onBack: _selecting ? _exitSelect : (widget.onClose ?? () => Navigator.pop(context)),
                 actions: _selecting
                     ? [
-                        IconBtn('trash', tooltip: 'Delete', onTap: (listing == null || _selected.isEmpty) ? null : () => _deleteSelected(listing.path)),
+                        IconBtn('trash', tooltip: 'Delete', onTap: (_busy != null || listing == null || _selected.isEmpty) ? null : () => _deleteSelected(listing.path)),
                         IconBtn('x', tooltip: 'Cancel', onTap: _exitSelect),
                       ]
                     : [
-                        if (listing != null) IconBtn('upload', tooltip: 'Upload files', onTap: () => _upload(listing.path)),
-                        if (listing != null) IconBtn('folder-plus', tooltip: 'New folder', onTap: () => _newFolder(listing.path)),
+                        if (listing != null) IconBtn('upload', tooltip: 'Upload files', onTap: _busy != null ? null : () => _upload(listing.path)),
+                        if (listing != null) IconBtn('folder-plus', tooltip: 'New folder', onTap: _busy != null ? null : () => _newFolder(listing.path)),
                       ],
               ),
+              if (_busy != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                  decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+                  child: Row(children: [
+                    const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent)),
+                    const SizedBox(width: 10),
+                    Text(_busy!, style: sans(12, color: AppColors.fg2)),
+                  ]),
+                ),
               if (segs.isNotEmpty)
                 Container(
                   height: 40,
