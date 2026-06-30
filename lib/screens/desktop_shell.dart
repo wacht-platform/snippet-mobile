@@ -224,7 +224,8 @@ class _AddInstanceField extends StatefulWidget {
   final void Function(Instance) onAdded;
   final bool dense;
   final bool startOpen; // reveal the input immediately (no intermediate button)
-  const _AddInstanceField({required this.onAdded, this.dense = false, this.startOpen = false});
+  final VoidCallback? onCancel; // dismiss the whole field (vs collapsing to a button)
+  const _AddInstanceField({required this.onAdded, this.dense = false, this.startOpen = false, this.onCancel});
   @override
   State<_AddInstanceField> createState() => _AddInstanceFieldState();
 }
@@ -309,11 +310,17 @@ class _AddInstanceFieldState extends State<_AddInstanceField> {
       Row(children: [
         if (_error != null) Expanded(child: Text(_error!, style: sans(11, color: AppColors.danger))) else const Spacer(),
         GestureDetector(
-          onTap: () => setState(() {
-            _open = false;
-            _error = null;
+          onTap: () {
             _ctrl.clear();
-          }),
+            if (widget.onCancel != null) {
+              widget.onCancel!(); // dismiss entirely (don't fall back to a button)
+            } else {
+              setState(() {
+                _open = false;
+                _error = null;
+              });
+            }
+          },
           child: Text('Cancel', style: sans(11.5, color: AppColors.fg3)),
         ),
       ]),
@@ -458,10 +465,15 @@ class _SidebarState extends State<_Sidebar> {
         if (_adding)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
-            child: _AddInstanceField(dense: true, startOpen: true, onAdded: (inst) {
-              setState(() => _adding = false);
-              widget.onInstanceAdded(inst);
-            }),
+            child: _AddInstanceField(
+              dense: true,
+              startOpen: true,
+              onCancel: () => setState(() => _adding = false),
+              onAdded: (inst) {
+                setState(() => _adding = false);
+                widget.onInstanceAdded(inst);
+              },
+            ),
           ),
         const Divider(height: 1, thickness: 1, color: AppColors.border),
         _footer(),
