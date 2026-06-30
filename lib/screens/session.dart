@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../api.dart';
@@ -48,11 +48,11 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   // Messages sent to the daemon but not yet echoed back as events — shown
   // optimistically (faint) so they don't vanish during the round-trip.
   final List<String> _pending = [];
-  // A pending image attachment: local path for the thumbnail + the uploaded
-  // daemon path the agent will read_image. _uploading while the upload is in flight.
-  String? _localImagePath;
-  String? _pendingImagePath;
-  bool _uploading = false;
+  // Pending attachments (images + files, up to 10): each uploads to the daemon
+  // and is referenced in the next message. Images → read_image, files → read.
+  final List<_Attachment> _attachments = [];
+  bool get _anyUploading => _attachments.any((a) => a.uploading);
+  static const int _maxAttachments = 10;
   bool _didInitialScroll = false;
   // Auto-reconnect: backoff timer + attempt counter; _closed stops retries on leave.
   Timer? _reconnectTimer;
@@ -231,13 +231,16 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
   void _sendMessage() {
     final t = _input.text.trim();
-    final img = _pendingImagePath;
-    if (t.isEmpty && img == null) return;
+    final ready = _attachments.where((a) => a.remotePath != null).toList();
+    if (t.isEmpty && ready.isEmpty) return;
     final running = _state?.status == 'running';
-    // Attach the uploaded image as an explicit read_image instruction so the agent
-    // reliably views it this turn.
-    final marker = '[attached image — call read_image on this exact path to view it: $img]';
-    final msg = img == null ? t : (t.isEmpty ? marker : '$t\n\n$marker');
+    // Reference each upload by its exact path so the agent reads it this turn.
+    final markers = ready
+        .map((a) => a.isImage
+            ? '[attached image — call read_image on this exact path to view it: ${a.remotePath}]'
+            : '[attached file — read it at this exact path: ${a.remotePath}]')
+        .join('\n');
+    final msg = markers.isEmpty ? t : (t.isEmpty ? markers : '$t\n\n$markers');
     setState(() {
       if (running) {
         // Busy: hold it and auto-submit when the run pauses (don't steer mid-task).
@@ -246,9 +249,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         _send({'kind': 'user_message', 'value': msg});
         _pending.add(msg); // show it until the daemon echoes it back
       }
-      _localImagePath = null;
-      _pendingImagePath = null;
-      _uploading = false;
+      _attachments.clear();
     });
     _input.clear();
     // Sending is an explicit action — re-pin and jump to the bottom.
@@ -256,26 +257,50 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     WidgetsBinding.instance.addPostFrameCallback((_) => _toBottom(jump: true));
   }
 
-  Future<void> _attachImage() async {
+  bool _isImageName(String n) {
+    final l = n.toLowerCase();
+    return const ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.heic', '.heif'].any(l.endsWith);
+  }
+
+  // Pick images and/or files (up to 10 total) and upload each to the workspace.
+  Future<void> _pickAttachments() async {
+    final remaining = _maxAttachments - _attachments.length;
+    if (remaining <= 0) {
+      _toast('Up to $_maxAttachments attachments.');
+      return;
+    }
+    FilePickerResult? res;
     try {
-      final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 2200);
-      if (x == null) return;
-      setState(() {
-        _localImagePath = x.path;
-        _pendingImagePath = null;
-        _uploading = true;
-      });
-      final bytes = await x.readAsBytes();
-      final path = await widget.client.uploadFile(bytes, name: x.name);
-      if (!mounted) return;
-      setState(() {
-        _pendingImagePath = path;
-        _uploading = false;
-      });
+      res = await FilePicker.pickFiles(allowMultiple: true, withData: true, type: FileType.any);
     } catch (e) {
-      if (mounted) {
-        setState(() => _uploading = false);
-        _toast('$e');
+      _toast('$e');
+      return;
+    }
+    if (res == null) return;
+    var files = res.files;
+    if (files.length > remaining) {
+      files = files.take(remaining).toList();
+      _toast('Added $remaining (max $_maxAttachments).');
+    }
+    final entries = files.map((f) => _Attachment(name: f.name, isImage: _isImageName(f.name), localPath: f.path)).toList();
+    if (entries.isEmpty) return;
+    setState(() => _attachments.addAll(entries));
+    for (var i = 0; i < entries.length; i++) {
+      final f = files[i];
+      final a = entries[i];
+      try {
+        final bytes = f.bytes ?? (f.path != null ? await File(f.path!).readAsBytes() : null);
+        if (bytes == null) throw 'could not read ${f.name}';
+        final path = await widget.client.uploadFile(bytes, name: f.name);
+        if (!mounted) return;
+        setState(() {
+          a.remotePath = path;
+          a.uploading = false;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _attachments.remove(a));
+        _toast('upload failed: ${f.name}');
       }
     }
   }
@@ -618,11 +643,11 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
   Widget _inputBar(bool running) {
     final hasText = _input.text.trim().isNotEmpty;
-    final canSend = (hasText || _pendingImagePath != null) && !_uploading;
+    final canSend = (hasText || _attachments.any((a) => a.remotePath != null)) && !_anyUploading;
     return Container(
       padding: EdgeInsets.fromLTRB(12, 4, 12, 8 + MediaQuery.of(context).padding.bottom),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        if (_localImagePath != null) _imageChip(),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (_attachments.isNotEmpty) _attachmentBar(),
         // One compact field with + (attach) and send inline; no top separator.
         Container(
           decoration: BoxDecoration(
@@ -632,7 +657,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           ),
           padding: const EdgeInsets.all(4),
           child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            IconBtn('plus', size: 30, iconSize: 18, tooltip: 'Attach image', onTap: _uploading ? null : _attachImage),
+            IconBtn('plus', size: 30, iconSize: 18, tooltip: 'Attach files', onTap: _pickAttachments),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -668,29 +693,36 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     );
   }
 
-  Widget _imageChip() {
+  Widget _attachmentBar() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8, left: 2, right: 2),
-      child: Row(children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: _localImagePath != null
-              ? Image.file(File(_localImagePath!), width: 40, height: 40, fit: BoxFit.cover)
-              : Container(width: 40, height: 40, color: AppColors.surface3),
+      child: Wrap(spacing: 8, runSpacing: 8, children: _attachments.map(_attachmentChip).toList()),
+    );
+  }
+
+  Widget _attachmentChip(_Attachment a) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(a.isImage && a.localPath != null ? 4 : 9, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(R.sm),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (a.isImage && a.localPath != null)
+          ClipRRect(borderRadius: BorderRadius.circular(R.xs), child: Image.file(File(a.localPath!), width: 26, height: 26, fit: BoxFit.cover))
+        else
+          AppIcon(a.isImage ? 'image' : 'file', size: 15, color: AppColors.fg3),
+        const SizedBox(width: 7),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 130),
+          child: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(11.5, color: AppColors.fg2)),
         ),
-        const SizedBox(width: 9),
-        if (_uploading) ...[
-          const SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3)),
-          const SizedBox(width: 8),
-          Text('Uploading…', style: sans(11.5, color: AppColors.fg3)),
-        ] else
-          Text('Image attached', style: sans(11.5, color: AppColors.fg2)),
-        const Spacer(),
-        IconBtn('x', size: 30, iconSize: 16, onTap: () => setState(() {
-          _localImagePath = null;
-          _pendingImagePath = null;
-          _uploading = false;
-        })),
+        const SizedBox(width: 4),
+        if (a.uploading)
+          const Padding(padding: EdgeInsets.all(6), child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3)))
+        else
+          IconBtn('x', size: 24, iconSize: 13, onTap: () => setState(() => _attachments.remove(a))),
       ]),
     );
   }
@@ -1368,6 +1400,16 @@ class _QuestionBarState extends State<_QuestionBar> {
       ]),
     );
   }
+}
+
+/// A pending composer attachment (image or file) being uploaded to the workspace.
+class _Attachment {
+  final String name;
+  final bool isImage;
+  final String? localPath; // local source (for image thumbnails)
+  String? remotePath; // daemon path once uploaded
+  bool uploading = true;
+  _Attachment({required this.name, required this.isImage, this.localPath});
 }
 
 /// Inline circular send button for the composer.
