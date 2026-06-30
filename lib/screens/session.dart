@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../api.dart';
@@ -262,36 +263,103 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     return const ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.heic', '.heif'].any(l.endsWith);
   }
 
-  // Pick images and/or files (up to 10 total) and upload each to the workspace.
-  Future<void> _pickAttachments() async {
-    final remaining = _maxAttachments - _attachments.length;
-    if (remaining <= 0) {
+  // `+` tapped: desktop opens a file picker directly; mobile shows a small
+  // Camera / Photos / Files sheet.
+  Future<void> _onAttachTap() async {
+    if (_maxAttachments - _attachments.length <= 0) {
       _toast('Up to $_maxAttachments attachments.');
       return;
     }
+    if (!kMobile) {
+      _pickFiles();
+      return;
+    }
+    final choice = await showAppSheet<String>(context, title: 'Add context', child: Row(children: [
+      _ctxOption('camera', 'Camera', 'camera'),
+      const SizedBox(width: 10),
+      _ctxOption('image', 'Photos', 'photos'),
+      const SizedBox(width: 10),
+      _ctxOption('file', 'Files', 'files'),
+    ]));
+    if (choice == 'camera') {
+      _pickCamera();
+    } else if (choice == 'photos') {
+      _pickPhotos();
+    } else if (choice == 'files') {
+      _pickFiles();
+    }
+  }
+
+  Widget _ctxOption(String icon, String label, String value) {
+    return Expanded(
+      child: Material(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(R.md),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(R.md),
+          onTap: () => Navigator.pop(context, value),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(R.md), border: Border.all(color: AppColors.border)),
+            child: Column(children: [
+              AppIcon(icon, size: 22, color: AppColors.fg2),
+              const SizedBox(height: 8),
+              Text(label, style: sans(12, color: AppColors.fg1)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFiles() async {
     FilePickerResult? res;
     try {
-      res = await FilePicker.pickFiles(allowMultiple: true, withData: true, type: FileType.any);
+      res = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true, type: FileType.any);
     } catch (e) {
       _toast('$e');
       return;
     }
     if (res == null) return;
-    var files = res.files;
-    if (files.length > remaining) {
-      files = files.take(remaining).toList();
+    await _ingest(res.files
+        .map((f) => (
+              name: f.name,
+              localPath: f.path,
+              readBytes: () async => f.bytes ?? await File(f.path!).readAsBytes(),
+            ))
+        .toList());
+  }
+
+  Future<void> _pickPhotos() async {
+    final xs = await ImagePicker().pickMultiImage(imageQuality: 85, maxWidth: 2200);
+    if (xs.isEmpty) return;
+    await _ingest(xs.map((x) => (name: x.name, localPath: x.path, readBytes: x.readAsBytes)).toList());
+  }
+
+  Future<void> _pickCamera() async {
+    final x = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2200);
+    if (x == null) return;
+    await _ingest([(name: x.name, localPath: x.path, readBytes: x.readAsBytes)]);
+  }
+
+  // Create attachment chips for the picked items (capped to 10 total) and upload each.
+  Future<void> _ingest(List<({String name, String? localPath, Future<Uint8List> Function() readBytes})> picked) async {
+    final remaining = _maxAttachments - _attachments.length;
+    if (remaining <= 0) return;
+    var items = picked;
+    if (items.length > remaining) {
+      items = items.take(remaining).toList();
       _toast('Added $remaining (max $_maxAttachments).');
     }
-    final entries = files.map((f) => _Attachment(name: f.name, isImage: _isImageName(f.name), localPath: f.path)).toList();
+    final entries = items.map((p) => _Attachment(name: p.name, isImage: _isImageName(p.name), localPath: p.localPath)).toList();
     if (entries.isEmpty) return;
     setState(() => _attachments.addAll(entries));
     for (var i = 0; i < entries.length; i++) {
-      final f = files[i];
+      final p = items[i];
       final a = entries[i];
       try {
-        final bytes = f.bytes ?? (f.path != null ? await File(f.path!).readAsBytes() : null);
-        if (bytes == null) throw 'could not read ${f.name}';
-        final path = await widget.client.uploadFile(bytes, name: f.name);
+        final bytes = await p.readBytes();
+        final path = await widget.client.uploadFile(bytes, name: p.name);
         if (!mounted) return;
         setState(() {
           a.remotePath = path;
@@ -300,7 +368,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       } catch (e) {
         if (!mounted) return;
         setState(() => _attachments.remove(a));
-        _toast('upload failed: ${f.name}');
+        _toast('upload failed: ${p.name}');
       }
     }
   }
@@ -657,7 +725,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           ),
           padding: const EdgeInsets.all(4),
           child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            IconBtn('plus', size: 30, iconSize: 18, tooltip: 'Attach files', onTap: _pickAttachments),
+            IconBtn('plus', size: 30, iconSize: 18, tooltip: 'Attach', onTap: _onAttachTap),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
