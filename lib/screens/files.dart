@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
 
@@ -44,6 +47,30 @@ class _FileExplorerState extends State<FileExplorer> {
     }
   }
 
+  // Upload files from the device into the current directory.
+  Future<void> _upload(String cwd) async {
+    FilePickerResult? res;
+    try {
+      res = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true, type: FileType.any);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      return;
+    }
+    if (res == null) return;
+    var uploaded = 0;
+    for (final f in res.files) {
+      try {
+        final bytes = f.bytes ?? (f.path != null ? await File(f.path!).readAsBytes() : null);
+        if (bytes == null) continue;
+        await widget.client.uploadFile(bytes, name: f.name, dir: cwd);
+        uploaded++;
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${f.name}: $e')));
+      }
+    }
+    if (uploaded > 0) _go(cwd);
+  }
+
   void _openFile(FsEntry e) => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => FileViewer(client: widget.client, path: e.path, name: e.name)),
@@ -61,6 +88,7 @@ class _FileExplorerState extends State<FileExplorer> {
             final segs = (listing?.path ?? '').split('/').where((s) => s.isNotEmpty).toList();
             return Column(children: [
               SnAppBar(title: widget.title, subtitle: listing?.path, onBack: widget.onClose ?? () => Navigator.pop(context), actions: [
+                if (listing != null) IconBtn('upload', tooltip: 'Upload files', onTap: () => _upload(listing.path)),
                 if (listing != null) IconBtn('folder-plus', tooltip: 'New folder', onTap: () => _newFolder(listing.path)),
               ]),
               if (segs.isNotEmpty)

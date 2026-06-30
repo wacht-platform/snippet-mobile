@@ -69,9 +69,12 @@ class DaemonClient {
 
   /// Upload image/file bytes; returns the absolute path on the daemon (which the
   /// agent can then view with read_image).
-  Future<String> uploadFile(List<int> bytes, {String? name}) async {
+  /// Upload [bytes]. With [dir] set, saves into that directory under [name]
+  /// (file-explorer upload); otherwise a temp path (chat attachment).
+  Future<String> uploadFile(List<int> bytes, {String? name, String? dir}) async {
     final body = <String, dynamic>{'data_base64': base64Encode(bytes)};
     if (name != null && name.isNotEmpty) body['name'] = name;
+    if (dir != null && dir.isNotEmpty) body['dir'] = dir;
     final r = await http.post(_uri('/fs/upload'), headers: _json, body: jsonEncode(body));
     if (r.statusCode != 200) throw _err('upload', r);
     return (jsonDecode(r.body) as Map<String, dynamic>)['path'] as String;
