@@ -302,6 +302,24 @@ class _DashedBorder extends CustomPainter {
   bool shouldRepaint(covariant _DashedBorder old) => old.color != color;
 }
 
+/// Internal attachment markers the agent reads but users must never see.
+final RegExp _attachMarkerRe = RegExp(r'\[attached (image|file) —[^\]]*\]', multiLine: true);
+
+/// Hide the `[attached …]` markers from displayed text. If a message is only
+/// attachments, show a short chip-like summary instead of an empty bubble.
+String hideAttachmentMarkers(String raw) {
+  final matches = _attachMarkerRe.allMatches(raw).toList();
+  if (matches.isEmpty) return raw;
+  final stripped = raw.replaceAll(_attachMarkerRe, '').trim();
+  if (stripped.isNotEmpty) return stripped;
+  final images = matches.where((m) => m.group(1) == 'image').length;
+  final files = matches.length - images;
+  final parts = <String>[];
+  if (images > 0) parts.add('$images image${images == 1 ? '' : 's'}');
+  if (files > 0) parts.add('$files file${files == 1 ? '' : 's'}');
+  return '📎 ${parts.join(' · ')}';
+}
+
 /// One chat message — flat (no bubble/box). YOUR messages get a left accent bar
 /// + label; the agent's are plain full-width markdown under a dim label. The bar
 /// vs no-bar is the primary you/agent distinction.
@@ -311,6 +329,7 @@ class Bubble extends StatelessWidget {
   const Bubble({super.key, required this.mine, required this.text});
   @override
   Widget build(BuildContext context) {
+    final shown = hideAttachmentMarkers(text);
     if (mine) {
       return IntrinsicHeight(
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -320,7 +339,7 @@ class Bubble extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('YOU', style: sans(10, color: AppColors.fg1, spacing: 0.8)),
               const SizedBox(height: 4),
-              SelectableText(text, style: sans(13.5, height: 1.5, color: AppColors.fg2)),
+              SelectableText(shown, style: sans(13.5, height: 1.5, color: AppColors.fg2)),
             ]),
           ),
         ]),
@@ -332,7 +351,7 @@ class Bubble extends StatelessWidget {
       // SelectionArea so a drag selects across all markdown blocks at once.
       SelectionArea(
         child: MarkdownBody(
-          data: text,
+          data: shown,
           selectable: false,
           styleSheet: markdownStyle(context),
           onTapLink: (txt, href, title) => openMarkdownLink(href),

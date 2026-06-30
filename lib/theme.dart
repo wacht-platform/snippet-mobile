@@ -171,6 +171,8 @@ IconData iconFor(String name) {
       return IconsaxPlusLinear.folder_add;
     case 'upload':
       return IconsaxPlusLinear.document_upload;
+    case 'download':
+      return IconsaxPlusLinear.document_download;
     case 'file':
       return IconsaxPlusLinear.document_text;
     case 'git-branch':

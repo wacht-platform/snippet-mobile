@@ -8,6 +8,7 @@ import '../api.dart';
 import '../highlight.dart';
 import '../models.dart';
 import '../panel.dart';
+import '../platform.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'editor.dart';
@@ -293,7 +294,25 @@ class _FileViewerState extends State<FileViewer> {
   final CodeLineEditingController _controller = CodeLineEditingController();
   FileContent? _f;
   bool _loading = true;
+  bool _downloading = false;
   String? _error;
+
+  Future<void> _download() async {
+    setState(() => _downloading = true);
+    try {
+      final bytes = await widget.client.downloadFile(widget.path);
+      // Mobile: saveFile writes directly. Desktop: it returns a path to write to.
+      final saved = await FilePicker.platform.saveFile(fileName: widget.name, bytes: bytes);
+      if (saved != null && !kMobile) await File(saved).writeAsBytes(bytes);
+      if (!mounted) return;
+      setState(() => _downloading = false);
+      if (saved != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Downloaded ${widget.name}')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _downloading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
 
   @override
   void initState() {
@@ -342,6 +361,7 @@ class _FileViewerState extends State<FileViewer> {
         bottom: false,
         child: Column(children: [
           SnAppBar(title: widget.name, subtitle: widget.path, onBack: widget.onClose ?? () => Navigator.pop(context), actions: [
+            IconBtn('download', tooltip: 'Download', onTap: _downloading ? null : _download),
             IconBtn('edit', tooltip: 'Edit', onTap: () => presentScreen(context,
               style: PanelStyle.dialog,
               dismissible: false,

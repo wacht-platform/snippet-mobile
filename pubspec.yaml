@@ -26,6 +26,7 @@ dependencies:
   re_highlight: ^0.0.3
   iconsax_plus: ^1.0.0
   file_picker: ^8.1.7
+  desktop_drop: ^0.7.1
 
 dev_dependencies:
   flutter_test:

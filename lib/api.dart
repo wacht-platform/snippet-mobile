@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -211,6 +212,13 @@ class DaemonClient {
   Future<void> deletePath(String path) async {
     final r = await http.post(_uri('/fs/delete'), headers: _json, body: jsonEncode({'path': path}));
     if (r.statusCode != 200) throw _err('delete', r);
+  }
+
+  /// Download a file's raw bytes (any type, up to the daemon's cap).
+  Future<Uint8List> downloadFile(String path) async {
+    final r = await http.get(_uri('/fs/download', {'path': path}));
+    if (r.statusCode != 200) throw _err('download', r);
+    return r.bodyBytes;
   }
 
   // ---- git (server-side, scoped to a session's workspace) ----
