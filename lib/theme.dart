@@ -217,6 +217,10 @@ IconData iconFor(String name) {
       return LucideIcons.house;
     case 'clock':
       return LucideIcons.clock;
+    case 'sidebar':
+      return LucideIcons.panelLeft;
+    case 'menu':
+      return LucideIcons.menu;
     default:
       return LucideIcons.circle;
   }

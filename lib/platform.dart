@@ -10,3 +10,7 @@ bool get kMobile =>
 
 /// The desktop layout (sidebar + panes) kicks in at/above this logical width.
 const double kDesktopBreakpoint = 900;
+
+/// Below this shell width the persistent sidebar collapses into a drawer (the
+/// desktop shell stays native — it never falls back to the phone UI).
+const double kShellCompact = 720;

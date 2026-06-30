@@ -553,8 +553,9 @@ class SnAppBar extends StatelessWidget {
   final String title;
   final String? subtitle;
   final VoidCallback? onBack;
+  final Widget? leading;
   final List<Widget> actions;
-  const SnAppBar({super.key, required this.title, this.subtitle, this.onBack, this.actions = const []});
+  const SnAppBar({super.key, required this.title, this.subtitle, this.onBack, this.leading, this.actions = const []});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -565,7 +566,7 @@ class SnAppBar extends StatelessWidget {
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(children: [
-        if (onBack != null) IconBtn('chevron-left', iconSize: 22, onTap: onBack) else const SizedBox(width: 8),
+        if (leading != null) leading! else if (onBack != null) IconBtn('chevron-left', iconSize: 22, onTap: onBack) else const SizedBox(width: 8),
         const SizedBox(width: 4),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [

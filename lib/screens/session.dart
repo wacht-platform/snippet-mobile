@@ -26,7 +26,9 @@ class SessionScreen extends StatefulWidget {
   /// True when shown as the main pane of the desktop shell (hides its own
   /// back/home chrome — navigation lives in the sidebar).
   final bool embedded;
-  const SessionScreen({super.key, required this.client, required this.sessionId, required this.title, this.profile, this.embedded = false});
+  /// When embedded in a narrow desktop shell, opens the collapsed sidebar drawer.
+  final VoidCallback? onMenu;
+  const SessionScreen({super.key, required this.client, required this.sessionId, required this.title, this.profile, this.embedded = false, this.onMenu});
   @override
   State<SessionScreen> createState() => _SessionScreenState();
 }
@@ -333,6 +335,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             title: _title.isEmpty ? 'session' : _title,
             subtitle: s != null && s.workspace.isNotEmpty ? s.workspace : null,
             onBack: widget.embedded ? null : () => Navigator.pop(context),
+            leading: widget.onMenu != null ? IconBtn('sidebar', tooltip: 'Sidebar', onTap: widget.onMenu) : null,
             actions: [
               if (!widget.embedded)
                 IconBtn('home', tooltip: 'Instances', onTap: () => Navigator.popUntil(context, (r) => r.isFirst)),

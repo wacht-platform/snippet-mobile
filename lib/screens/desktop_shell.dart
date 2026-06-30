@@ -6,6 +6,7 @@ import '../api.dart';
 import '../command_palette.dart';
 import '../models.dart';
 import '../panel.dart';
+import '../platform.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets.dart';
@@ -23,6 +24,7 @@ class DesktopShell extends StatefulWidget {
 }
 
 class _DesktopShellState extends State<DesktopShell> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   final InstanceStore _store = InstanceStore();
   List<Instance> _instances = const [];
   Instance? _active;
@@ -88,41 +90,64 @@ class _DesktopShellState extends State<DesktopShell> {
     });
   }
 
+  Widget _sidebar({VoidCallback? onAfterPick}) => _Sidebar(
+        instances: _instances,
+        active: _active,
+        client: _client,
+        selectedSessionId: _sessionId,
+        onSelectInstance: _selectInstance,
+        onOpenSession: (id, title, profile) {
+          _openSession(id, title, profile);
+          onAfterPick?.call();
+        },
+        onInstanceAdded: _onInstanceAdded,
+        onRemoveInstance: _removeInstance,
+      );
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: SafeArea(
-        child: _loading
-            ? const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3)))
-            : Row(children: [
-                SizedBox(
-                  width: 300,
-                  child: _Sidebar(
-                    instances: _instances,
-                    active: _active,
-                    client: _client,
-                    selectedSessionId: _sessionId,
-                    onSelectInstance: _selectInstance,
-                    onOpenSession: _openSession,
-                    onInstanceAdded: _onInstanceAdded,
-                    onRemoveInstance: _removeInstance,
-                  ),
-                ),
-                const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
-                Expanded(child: _mainPane()),
-              ]),
-      ),
-    );
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: AppColors.bg,
+        body: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))),
+      );
+    }
+    return LayoutBuilder(builder: (context, c) {
+      // Narrow window → keep the native shell but collapse the sidebar to a drawer.
+      if (c.maxWidth < kShellCompact) {
+        return Scaffold(
+          key: _scaffoldKey,
+          backgroundColor: AppColors.bg,
+          drawerEdgeDragWidth: 24,
+          drawer: Drawer(
+            width: 300,
+            backgroundColor: AppColors.surface1,
+            shape: const RoundedRectangleBorder(),
+            child: SafeArea(child: _sidebar(onAfterPick: () => _scaffoldKey.currentState?.closeDrawer())),
+          ),
+          body: SafeArea(child: _mainPane(onMenu: () => _scaffoldKey.currentState?.openDrawer())),
+        );
+      }
+      return Scaffold(
+        backgroundColor: AppColors.bg,
+        body: SafeArea(
+          child: Row(children: [
+            SizedBox(width: 300, child: _sidebar()),
+            const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
+            Expanded(child: _mainPane()),
+          ]),
+        ),
+      );
+    });
   }
 
-  Widget _mainPane() {
+  Widget _mainPane({VoidCallback? onMenu}) {
     final client = _client;
     if (client == null) {
-      return _welcome();
+      return _withMenu(onMenu, _welcome());
     }
     if (_sessionId == null) {
-      return const Center(child: EmptyState(icon: 'layers', title: 'No session selected', body: 'Pick a session on the left, or start a new one.'));
+      return _withMenu(onMenu, const Center(child: EmptyState(icon: 'layers', title: 'No session selected', body: 'Pick a session on the left, or start a new one.')));
     }
     // Pane-scoped MediaQuery so window-width sizing (chat bubbles) fits the pane.
     return LayoutBuilder(builder: (ctx, c) {
@@ -136,9 +161,19 @@ class _DesktopShellState extends State<DesktopShell> {
           title: _sessionTitle,
           profile: _sessionProfile,
           embedded: true,
+          onMenu: onMenu,
         ),
       );
     });
+  }
+
+  // When collapsed, overlay a sidebar-toggle on the welcome/empty states.
+  Widget _withMenu(VoidCallback? onMenu, Widget child) {
+    if (onMenu == null) return child;
+    return Stack(children: [
+      child,
+      Positioned(top: 6, left: 6, child: IconBtn('sidebar', tooltip: 'Sidebar', onTap: onMenu)),
+    ]);
   }
 
   Widget _welcome() {
