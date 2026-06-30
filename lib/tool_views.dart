@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:re_editor/re_editor.dart';
 
+import 'highlight.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -192,7 +194,7 @@ List<Widget> _writeView(Map? a, Map? d, {required String verb}) {
     out.add(const SizedBox(height: 12));
     out.add(const SectionLabel('Contents'));
     out.add(const SizedBox(height: 8));
-    out.add(_NumberedCode(content));
+    out.add(_HiCodeBlock(path, content));
   } else if (d?['written'] == true) {
     out.add(_done('$verb file'));
   }
@@ -221,7 +223,8 @@ List<Widget> _appendView(Map? a, Map? d) {
 
 List<Widget> _readView(Map? a, Map? d) {
   final out = <Widget>[];
-  out.add(_PathChip(a?['path']?.toString() ?? d?['path']?.toString() ?? ''));
+  final path = a?['path']?.toString() ?? d?['path']?.toString() ?? '';
+  out.add(_PathChip(path));
   final chips = <Widget>[];
   final sl = d?['start_line'], el = d?['end_line'];
   if (sl != null || el != null) chips.add(_chip('list', 'lines $sl–$el'));
@@ -236,8 +239,7 @@ List<Widget> _readView(Map? a, Map? d) {
     out.add(const SizedBox(height: 12));
     out.add(const SectionLabel('Contents'));
     out.add(const SizedBox(height: 8));
-    final start = sl is int ? sl : (d?['start_char'] == null ? 1 : null);
-    out.add(_NumberedCode(content, startLine: start));
+    out.add(_HiCodeBlock(path, content));
   }
   if (d?['truncated'] == true && d?['hint'] != null) {
     out.add(const SizedBox(height: 10));
@@ -811,38 +813,57 @@ class _CommandBox extends StatelessWidget {
   }
 }
 
-/// Monospace block with a line-number gutter.
-class _NumberedCode extends StatelessWidget {
+/// Read-only code block with syntax highlighting (by filename) + line numbers,
+/// matching the file viewer. Bounded height with its own scroll for the drawer.
+class _HiCodeBlock extends StatefulWidget {
+  final String filename;
   final String text;
-  final int? startLine;
-  const _NumberedCode(this.text, {this.startLine});
+  const _HiCodeBlock(this.filename, this.text);
+  @override
+  State<_HiCodeBlock> createState() => _HiCodeBlockState();
+}
+
+class _HiCodeBlockState extends State<_HiCodeBlock> {
+  final CodeLineEditingController _c = CodeLineEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _c.text = widget.text;
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final lines = text.split('\n');
-    final base = startLine ?? 1;
-    final width = '${base + lines.length}'.length;
+    final lineCount = '\n'.allMatches(widget.text).length + 1;
+    // Snug height for short files; cap + internal scroll for long ones.
+    final h = (lineCount * 20.0 + 16).clamp(44.0, 360.0);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      height: h,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: AppColors.surface2,
+        color: AppColors.bg,
         borderRadius: BorderRadius.circular(R.md),
         border: Border.all(color: AppColors.border),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        for (var i = 0; i < lines.length; i++)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0.5),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              SizedBox(
-                width: width * 8.0 + 6,
-                child: Text('${base + i}'.padLeft(width),
-                    style: mono(11, height: 1.5, color: AppColors.diffGutter)),
-              ),
-              Expanded(child: Text(lines[i], style: mono(11.5, height: 1.5, color: AppColors.fg1))),
-            ]),
-          ),
-      ]),
+      child: CodeEditor(
+        controller: _c,
+        readOnly: true,
+        wordWrap: false,
+        style: codeEditorStyle(widget.filename),
+        indicatorBuilder: (context, editingController, chunkController, notifier) {
+          return Row(children: [
+            DefaultCodeLineNumber(controller: editingController, notifier: notifier),
+            DefaultCodeChunkIndicator(width: 20, controller: chunkController, notifier: notifier),
+          ]);
+        },
+      ),
     );
   }
 }

@@ -660,7 +660,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       final p = pending;
       if (p != null) {
         final name = _s(p['tool_name']);
-        group.add(ToolLine(tool: name, icon: toolIcon(name), arg: toolArgSummary(name, p['arguments']), done: false, detailBuilder: (ctx) => toolDetailView(ctx, tool: name, args: p['arguments'], result: null)));
+        group.add(ToolLine(tool: name, icon: toolIcon(name), arg: toolArgSummary(name, p['arguments']), done: false, onTap: () => _showToolDetail(name, p['arguments'], null)));
         pending = null;
       }
     }
@@ -693,12 +693,12 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             final p = pending;
             if (p != null) {
               final name = _s(p['tool_name']);
-              group.add(ToolLine(tool: name, icon: toolIcon(name), arg: toolArgSummary(name, p['arguments']), out: _resultStatus(e['result']), done: _ok(e['result']), detailBuilder: (ctx) => toolDetailView(ctx, tool: name, args: p['arguments'], result: e['result'])));
+              group.add(ToolLine(tool: name, icon: toolIcon(name), arg: toolArgSummary(name, p['arguments']), out: _resultStatus(e['result']), done: _ok(e['result']), onTap: () => _showToolDetail(name, p['arguments'], e['result'])));
               pending = null;
             } else {
               final name = _s(e['tool_name']);
               if (_isMetaTool(name)) break;
-              group.add(ToolLine(tool: name, icon: toolIcon(name), out: _resultStatus(e['result']), done: _ok(e['result']), detailBuilder: (ctx) => toolDetailView(ctx, tool: name, args: null, result: e['result'])));
+              group.add(ToolLine(tool: name, icon: toolIcon(name), out: _resultStatus(e['result']), done: _ok(e['result']), onTap: () => _showToolDetail(name, null, e['result'])));
             }
           }
         case 'user_input':
@@ -750,6 +750,12 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
   void _showNote(String text) {
     showAppSheet(context, title: 'Note', child: SelectableText(text, style: sans(13.5, height: 1.5, color: AppColors.fg1)));
+  }
+
+  void _showToolDetail(String name, dynamic args, dynamic result) {
+    showAppSheet(context,
+        title: toolTitle(name),
+        child: toolDetailView(context, tool: name, args: args, result: result));
   }
 
   // Short result tag shown on the inline line: exit code for bash, else status.
