@@ -301,13 +301,23 @@ class _FileViewerState extends State<FileViewer> {
     setState(() => _downloading = true);
     try {
       final bytes = await widget.client.downloadFile(widget.path);
+      // Keep the original extension so the OS recognizes the file type (e.g. .docx,
+      // not a generic binary). The save panel can otherwise drop it.
+      final dot = widget.name.lastIndexOf('.');
+      final ext = dot > 0 ? widget.name.substring(dot + 1).toLowerCase() : '';
       // Mobile: saveFile writes the bytes directly. Desktop: bytes aren't
       // supported — it returns the chosen path and we write the file ourselves.
       final saved = await FilePicker.platform.saveFile(
         fileName: widget.name,
         bytes: kMobile ? bytes : null,
+        type: ext.isEmpty ? FileType.any : FileType.custom,
+        allowedExtensions: ext.isEmpty ? null : [ext],
       );
-      if (saved != null && !kMobile) await File(saved).writeAsBytes(bytes);
+      if (saved != null && !kMobile) {
+        // The panel can return a path missing the extension — re-append it.
+        final out = (ext.isNotEmpty && !saved.toLowerCase().endsWith('.$ext')) ? '$saved.$ext' : saved;
+        await File(out).writeAsBytes(bytes);
+      }
       if (!mounted) return;
       setState(() => _downloading = false);
       if (saved != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Downloaded ${widget.name}')));
