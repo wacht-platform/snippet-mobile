@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// snippet — Wacht design system (dark), one electric-blue accent.
 /// Resolved dark-theme tokens from the design handoff.
@@ -98,6 +99,8 @@ ThemeData buildAppTheme() {
     highlightColor: AppColors.surface3.withValues(alpha: 0.3),
     textTheme: _allRegular(GoogleFonts.geistTextTheme(base.textTheme)
         .apply(bodyColor: AppColors.fg1, displayColor: AppColors.fg1)),
+    // Subtle dividers everywhere (incl. PopupMenuDivider) — no bright lines.
+    dividerTheme: const DividerThemeData(color: AppColors.border, thickness: 1, space: 12),
   );
 }
 
@@ -113,105 +116,104 @@ TextTheme _allRegular(TextTheme t) {
   );
 }
 
-/// Map the handoff's Lucide icon names to Material (outlined where it reads as a
-/// line icon). Keeps a single naming surface across the app.
+/// Map the handoff's Lucide icon names to the Lucide icon set (clean line icons).
 IconData iconFor(String name) {
   switch (name) {
     case 'chevron-left':
-      return Icons.chevron_left;
+      return LucideIcons.chevronLeft;
     case 'chevron-right':
-      return Icons.chevron_right;
+      return LucideIcons.chevronRight;
     case 'chevron-down':
-      return Icons.expand_more;
+      return LucideIcons.chevronDown;
     case 'chevron-up':
-      return Icons.expand_less;
+      return LucideIcons.chevronUp;
     case 'arrow-right':
-      return Icons.arrow_forward;
+      return LucideIcons.arrowRight;
     case 'plus':
-      return Icons.add;
+      return LucideIcons.plus;
     case 'x':
-      return Icons.close;
+      return LucideIcons.x;
     case 'more-vertical':
-      return Icons.more_vert;
+      return LucideIcons.ellipsisVertical;
     case 'search':
-      return Icons.search;
+      return LucideIcons.search;
     case 'settings':
-      return Icons.settings_outlined;
+      return LucideIcons.settings;
     case 'sliders':
-      return Icons.tune;
+      return LucideIcons.slidersHorizontal;
     case 'wifi-off':
-      return Icons.wifi_off_rounded;
+      return LucideIcons.wifiOff;
     case 'refresh':
-      return Icons.refresh;
+      return LucideIcons.refreshCw;
     case 'alert-triangle':
-      return Icons.warning_amber_rounded;
+      return LucideIcons.triangleAlert;
     case 'check':
-      return Icons.check;
+      return LucideIcons.check;
     case 'check-check':
-      return Icons.done_all;
+      return LucideIcons.checkCheck;
     case 'stop':
-      return Icons.stop_rounded;
+      return LucideIcons.square;
     case 'send':
-      return Icons.arrow_upward_rounded;
+      return LucideIcons.arrowUp;
     case 'shield':
-      return Icons.shield_outlined;
+      return LucideIcons.shield;
     case 'folder':
-      return Icons.folder_outlined;
+      return LucideIcons.folder;
     case 'folder-open':
-      return Icons.folder_open_outlined;
+      return LucideIcons.folderOpen;
     case 'file':
-      return Icons.insert_drive_file_outlined;
+      return LucideIcons.file;
     case 'git-branch':
-      return Icons.account_tree_outlined;
+      return LucideIcons.gitBranch;
     case 'terminal':
-      return Icons.terminal_rounded;
+      return LucideIcons.terminal;
     case 'grip':
-      return Icons.drag_handle;
+      return LucideIcons.gripVertical;
     case 'edit':
-      return Icons.edit_outlined;
+      return LucideIcons.squarePen;
     case 'trash':
-      return Icons.delete_outline;
+      return LucideIcons.trash2;
     case 'key':
-      return Icons.vpn_key_outlined;
+      return LucideIcons.key;
     case 'cpu':
-      return Icons.memory_outlined;
+      return LucideIcons.cpu;
     case 'layers':
-      return Icons.layers_outlined;
+      return LucideIcons.layers;
     case 'activity':
-      return Icons.show_chart;
+      return LucideIcons.activity;
     case 'image':
-      return Icons.image_outlined;
+      return LucideIcons.image;
     case 'scan':
-      return Icons.qr_code_scanner;
+      return LucideIcons.scanLine;
     case 'camera':
-      return Icons.photo_camera_outlined;
+      return LucideIcons.camera;
     case 'camera-off':
-      return Icons.no_photography_outlined;
+      return LucideIcons.cameraOff;
     case 'clipboard':
-      return Icons.content_paste;
+      return LucideIcons.clipboard;
     case 'history':
-      return Icons.history;
+      return LucideIcons.history;
     case 'zap':
-      return Icons.bolt_outlined;
+      return LucideIcons.zap;
     case 'minimize':
-      return Icons.remove;
+      return LucideIcons.minimize;
     case 'rotate':
-      return Icons.restore;
+      return LucideIcons.rotateCcw;
     case 'globe':
-      return Icons.public;
+      return LucideIcons.globe;
     case 'map':
-      return Icons.account_tree_outlined;
+      return LucideIcons.map;
     case 'list':
-      return Icons.format_list_bulleted;
+      return LucideIcons.list;
     case 'file-plus':
-      return Icons.note_add_outlined;
+      return LucideIcons.filePlus;
     case 'corner-down-right':
-      return Icons.subdirectory_arrow_right;
+      return LucideIcons.cornerDownRight;
     case 'home':
-      return Icons.home_outlined;
+      return LucideIcons.house;
     case 'clock':
-      return Icons.schedule;
+      return LucideIcons.clock;
     default:
-      return Icons.circle_outlined;
+      return LucideIcons.circle;
   }
 }
