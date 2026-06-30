@@ -109,7 +109,7 @@ class _DesktopShellState extends State<DesktopShell> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppColors.canvas,
         body: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))),
       );
     }
@@ -122,11 +122,11 @@ class _DesktopShellState extends State<DesktopShell> {
       if (c.maxWidth < kShellCompact) {
         return Scaffold(
           key: _scaffoldKey,
-          backgroundColor: AppColors.bg,
+          backgroundColor: AppColors.canvas,
           drawerEdgeDragWidth: 24,
           drawer: Drawer(
             width: 300,
-            backgroundColor: AppColors.bg,
+            backgroundColor: AppColors.canvas,
             shape: const RoundedRectangleBorder(),
             child: SafeArea(
               child: Padding(
@@ -144,7 +144,7 @@ class _DesktopShellState extends State<DesktopShell> {
         );
       }
       return Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppColors.canvas,
         body: SafeArea(
           child: Column(children: [
             topStrip,
@@ -450,7 +450,7 @@ class _SidebarState extends State<_Sidebar> {
   Widget build(BuildContext context) {
     final hasClient = widget.client != null;
     return Container(
-      color: AppColors.bg, // sidebar is the darkest surface; chat canvas is lighter
+      color: AppColors.canvas, // same surface as the chat canvas
       child: Column(children: [
         const SizedBox(height: 6),
         _navRow('edit', 'New chat', onTap: hasClient ? _newSession : null),
