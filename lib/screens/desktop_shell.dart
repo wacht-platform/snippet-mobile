@@ -619,7 +619,7 @@ class _SidebarState extends State<_Sidebar> {
     if (list.isEmpty) {
       return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('No chats yet.', style: sans(12.5, color: AppColors.fg4))));
     }
-    // Group chats by folder (project), preserving recency order.
+    // Group chats by folder (project); list is recency-sorted so each group is too.
     final order = <String>[];
     final groups = <String, List<SessionInfo>>{};
     for (final s in list) {
@@ -629,6 +629,8 @@ class _SidebarState extends State<_Sidebar> {
       }())
           .add(s);
     }
+    // Sort projects by last activity (their most recent session) — newest first.
+    order.sort((a, b) => groups[b]!.first.lastActive.compareTo(groups[a]!.first.lastActive));
     return ListView(
       padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
       children: [
@@ -650,13 +652,20 @@ class _SidebarState extends State<_Sidebar> {
 
   Widget _projectHeader(String folder) {
     final name = folder.split('/').where((p) => p.isNotEmpty).lastOrNull ?? (folder.isEmpty ? '—' : folder);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 6, 6, 3),
-      child: Row(children: [
-        AppIcon('layers', size: kMobile ? 15 : 13, color: AppColors.fg3),
-        const SizedBox(width: 8),
-        Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(_projText, color: AppColors.fg2))),
-      ]),
+    // Show just the project name; reveal the full folder + machine on hover/long-press.
+    final machine = widget.active?.label;
+    final detail = machine == null || machine.isEmpty ? folder : '$folder\non $machine';
+    return Tooltip(
+      message: detail,
+      waitDuration: const Duration(milliseconds: 400),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 6, 6, 3),
+        child: Row(children: [
+          AppIcon('layers', size: kMobile ? 15 : 13, color: AppColors.fg3),
+          const SizedBox(width: 8),
+          Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(_projText, color: AppColors.fg2))),
+        ]),
+      ),
     );
   }
 
