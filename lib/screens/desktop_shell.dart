@@ -221,7 +221,8 @@ class _DesktopShellState extends State<DesktopShell> {
         return Scaffold(
           key: _scaffoldKey,
           backgroundColor: AppColors.canvas,
-          drawerEdgeDragWidth: 24,
+          // Wider left-edge swipe target on phones so the sidebar is easy to pull open.
+          drawerEdgeDragWidth: kMobile ? 56 : 24,
           drawer: Drawer(
             width: drawerW,
             backgroundColor: AppColors.canvas,
@@ -595,9 +596,9 @@ class _SidebarState extends State<_Sidebar> {
   }
 
   // The sidebar/drawer reads bigger on phones than on desktop.
-  double get _navText => kMobile ? 15.5 : 13;
-  double get _navIcon => kMobile ? 20 : 16;
-  double get _navPadV => kMobile ? 12 : 8;
+  double get _navText => kMobile ? 16.5 : 13;
+  double get _navIcon => kMobile ? 22 : 16;
+  double get _navPadV => kMobile ? 13 : 8;
   double get _projText => kMobile ? 13.5 : 12;
   double get _rowTitle => kMobile ? 14.5 : 12.5;
   double get _rowTime => kMobile ? 11.5 : 10;
