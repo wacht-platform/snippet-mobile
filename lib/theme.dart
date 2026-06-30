@@ -124,16 +124,17 @@ TextTheme _allRegular(TextTheme t) {
 /// Map the app's icon names to Iconsax (linear) — outlined, borderless variants.
 IconData iconFor(String name) {
   switch (name) {
+    // Directional chevrons: Material's bare glyphs (Iconsax's are circle/box-enclosed).
     case 'chevron-left':
-      return IconsaxPlusLinear.arrow_left_1;
+      return Icons.chevron_left_rounded;
     case 'chevron-right':
-      return IconsaxPlusLinear.arrow_right_2;
+      return Icons.chevron_right_rounded;
     case 'chevron-down':
-      return IconsaxPlusLinear.arrow_down_2;
+      return Icons.expand_more_rounded;
     case 'chevron-up':
-      return IconsaxPlusLinear.arrow_up_2;
+      return Icons.expand_less_rounded;
     case 'arrow-right':
-      return IconsaxPlusLinear.arrow_right_3;
+      return Icons.arrow_forward_rounded;
     case 'plus':
       return IconsaxPlusLinear.add;
     case 'x':

@@ -231,17 +231,15 @@ class _AllSessionsScreenState extends State<AllSessionsScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(s.title.isEmpty ? '(untitled)' : s.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(13.5, height: 1.25, color: AppColors.fg1)),
                 const SizedBox(height: 3),
-                Row(children: [
-                  Expanded(child: Text('${inst.label}  ·  ${_folderName(s.folder)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(10.5, color: AppColors.fg3))),
-                  if (_ago(s.lastActive).isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Text(_ago(s.lastActive), style: mono(10.5, color: AppColors.fg4)),
-                  ],
-                ]),
+                Text('${inst.label}  ·  ${_folderName(s.folder)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(10.5, color: AppColors.fg3)),
               ]),
             ),
+            if (_ago(s.lastActive).isNotEmpty) ...[
+              const SizedBox(width: 10),
+              Text(_ago(s.lastActive), style: mono(10.5, color: AppColors.fg4)),
+            ],
             const SizedBox(width: 8),
-            const AppIcon('chevron-right', size: 15, color: AppColors.fg4),
+            const AppIcon('chevron-right', size: 18, color: AppColors.fg4),
           ]),
         ),
       ),

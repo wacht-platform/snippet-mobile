@@ -113,10 +113,6 @@ class _DesktopShellState extends State<DesktopShell> {
         body: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))),
       );
     }
-    // A full-width strip at the top reserves room for the macOS window controls
-    // (and is draggable to move the window) — applied uniformly so everything
-    // below clears them.
-    final topStrip = kMacOS ? const SizedBox(height: kMacTitlebar) : const SizedBox.shrink();
     return LayoutBuilder(builder: (context, c) {
       // Narrow window → keep the native shell but collapse the sidebar to a drawer.
       if (c.maxWidth < kShellCompact) {
@@ -128,33 +124,27 @@ class _DesktopShellState extends State<DesktopShell> {
             width: 300,
             backgroundColor: AppColors.canvas,
             shape: const RoundedRectangleBorder(),
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.only(top: kMacOS ? kMacTitlebar : 0),
-                child: _sidebar(onAfterPick: () => _scaffoldKey.currentState?.closeDrawer()),
-              ),
-            ),
+            child: SafeArea(child: _sidebar(onAfterPick: () => _scaffoldKey.currentState?.closeDrawer())),
           ),
+          // Narrow: the toolbar's sidebar-toggle is at the far left under the
+          // traffic lights, so inset the whole pane below them.
           body: SafeArea(
-            child: Column(children: [
-              topStrip,
-              Expanded(child: _mainPane(onMenu: () => _scaffoldKey.currentState?.openDrawer())),
-            ]),
+            child: Padding(
+              padding: EdgeInsets.only(top: kMacOS ? kMacTitlebar : 0),
+              child: _mainPane(onMenu: () => _scaffoldKey.currentState?.openDrawer()),
+            ),
           ),
         );
       }
+      // Wide: only the sidebar (top-left) sits under the traffic lights; the chat
+      // toolbar fills the title-bar row at the top — no dead strip.
       return Scaffold(
         backgroundColor: AppColors.canvas,
         body: SafeArea(
-          child: Column(children: [
-            topStrip,
-            Expanded(
-              child: Row(children: [
-                SizedBox(width: 300, child: _sidebar()),
-                const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
-                Expanded(child: _mainPane()),
-              ]),
-            ),
+          child: Row(children: [
+            SizedBox(width: 300, child: _sidebar()),
+            const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
+            Expanded(child: _mainPane()),
           ]),
         ),
       );
@@ -412,8 +402,11 @@ class _SidebarState extends State<_Sidebar> {
   Future<void> _newSession() async {
     final c = widget.client;
     if (c == null) return;
-    final id = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => FolderBrowser(client: c, newConversation: true)),
+    // FolderBrowser pops with the new session id; in a drawer that value flows
+    // back through presentScreen.
+    final id = await presentScreen<String>(
+      context,
+      builder: (_, close) => FolderBrowser(client: c, newConversation: true),
     );
     if (id != null) {
       widget.onOpenSession(id, 'New session', null);
@@ -452,7 +445,7 @@ class _SidebarState extends State<_Sidebar> {
     return Container(
       color: AppColors.canvas, // same surface as the chat canvas
       child: Column(children: [
-        const SizedBox(height: 6),
+        SizedBox(height: kMacOS ? kMacTitlebar + 6 : 6), // clear the window controls
         _navRow('edit', 'New chat', onTap: hasClient ? _newSession : null),
         _navRow('search', 'Search', onTap: hasClient ? _openSearch : null),
         const SizedBox(height: 4),
@@ -720,7 +713,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                 const SectionLabel('Configuration'),
                 const SizedBox(height: 6),
                 _tile('cpu', 'Models', 'Providers & active model',
-                    () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ModelsScreen(client: widget.client)))),
+                    () => presentScreen(context, builder: (_, close) => ModelsScreen(client: widget.client, onClose: close))),
                 if (kCanNotify) ...[
                   const SizedBox(height: 6),
                   _notifTile(),

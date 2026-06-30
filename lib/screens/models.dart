@@ -9,7 +9,8 @@ import 'model_editor.dart';
 
 class ModelsScreen extends StatefulWidget {
   final DaemonClient client;
-  const ModelsScreen({super.key, required this.client});
+  final VoidCallback? onClose;
+  const ModelsScreen({super.key, required this.client, this.onClose});
   @override
   State<ModelsScreen> createState() => _ModelsScreenState();
 }
@@ -46,7 +47,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
       body: SafeArea(
         bottom: false,
         child: Column(children: [
-          SnAppBar(title: 'Models', onBack: () => Navigator.pop(context)),
+          SnAppBar(title: 'Models', onBack: widget.onClose ?? () => Navigator.pop(context)),
           Expanded(
             child: FutureBuilder<ServerConfig>(
               future: _future,
