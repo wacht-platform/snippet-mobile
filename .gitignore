@@ -48,3 +48,6 @@ app.*.map.json
 ._*
 .AppleDouble
 android/.gradle/
+
+# Android Gradle build output
+/android/build/

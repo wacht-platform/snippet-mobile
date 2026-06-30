@@ -1,23 +1,22 @@
-# snippet-mobile — project instructions
+# snippet-mobile — contributor notes
 
-Flutter remote-control client for the snippet `serve` daemon (Dart package
-`snippet`, Android appId `com.snippet`). The daemon repo is `snippet`
-(`~/snippet` on the box) — see its **HANDOFF.md** for the full picture, the
-daemon API, and the deploy runbook.
+Flutter remote-control client (Android + macOS) for the snippet `serve` daemon
+(Dart package `snippet`, app id `com.snippet`). The daemon lives in the
+[`snippet`](https://github.com/wacht-platform/snippet) repo — see its README for
+the daemon API. See **README.md** here for build/run.
 
-## Conventions (must follow)
-- Author commits as **snipextt@gmail.com** (never [redacted]).
-- **No branding** in commit messages — no `Co-Authored-By`, no "Generated with Claude Code".
-- Keep code comments **lean and sparse**.
+## Conventions
+- Keep code comments **lean and sparse**; match the surrounding style.
 - **Never expose** the user's API key or the serve token.
+- No AI/tool branding in commit messages.
 
-## Build (box)
-- Env: `PATH=~/flutter/bin:$PATH`, `JAVA_HOME=~/jdk`, `ANDROID_SDK_ROOT=~/Android`.
-- Always `flutter analyze lib` before `flutter build apk --release --split-per-abi`.
-- APK download staging: `~/apk-serve/snippet.apk` (served via `python3 -m http.server`
-  + a cloudflared quick tunnel).
+## Build / verify
+- `flutter analyze lib` should pass before a PR.
+- `flutter run -d macos` for desktop; `flutter build apk --release` for Android.
 
 ## Layout
 - `lib/api.dart` (DaemonClient), `lib/models.dart`, `lib/widgets.dart`,
-  `lib/theme.dart`, `lib/screens/*` (instances, recent, folder, session, model_editor).
+  `lib/theme.dart`, `lib/panel.dart`, `lib/command_palette.dart`, `lib/screens/*`.
+- One adaptive shell (`screens/desktop_shell.dart`): two-pane when wide, a
+  collapsed sidebar drawer when narrow (phones and shrunk desktop windows).
 - The app connects to a daemon via `http(s)://host[:port]/?token=<token>`.
