@@ -535,7 +535,7 @@ Widget _chip(String icon, String label) => Container(
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         AppIcon(icon, size: 11, color: AppColors.fg3),
         const SizedBox(width: 5),
-        Text(label, style: mono(10.5, color: AppColors.fg2)),
+        Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(10.5, color: AppColors.fg2))),
       ]),
     );
 
@@ -548,7 +548,7 @@ Widget _statusChip(bool ok, String label) => Container(
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         AppIcon(ok ? 'check' : 'alert-triangle', size: 11, color: ok ? AppColors.ok : AppColors.danger),
         const SizedBox(width: 5),
-        Text(label, style: mono(10.5, weight: FontWeight.w500, color: ok ? AppColors.ok : AppColors.danger)),
+        Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(10.5, weight: FontWeight.w500, color: ok ? AppColors.ok : AppColors.danger))),
       ]),
     );
 
