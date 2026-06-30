@@ -31,7 +31,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
       await op();
       _refresh();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$onError: $e')));
+      if (mounted) toast(context, '$onError: $e', danger: true);
     }
   }
 

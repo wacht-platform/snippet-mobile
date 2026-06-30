@@ -33,7 +33,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
       await widget.client.mkdir('$cwd/$trimmed');
       _go(cwd);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted) toast(context, '$e', danger: true);
     }
   }
 
@@ -45,7 +45,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
     } catch (e) {
       if (mounted) {
         setState(() => _opening = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        toast(context, '$e', danger: true);
       }
     }
   }

@@ -1,9 +1,84 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'platform.dart';
 import 'theme.dart';
+
+OverlayEntry? _activeToast;
+Timer? _toastTimer;
+
+/// A slick, theme-styled toast rendered in the ROOT overlay — so it floats above
+/// panels/dialogs instead of a SnackBar buried behind a modal backdrop. A new one
+/// replaces the previous (no stacking). Use for transient feedback.
+void toast(BuildContext context, String message, {bool danger = false}) {
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  if (overlay == null) return;
+  _activeToast?.remove();
+  _toastTimer?.cancel();
+  final entry = OverlayEntry(
+    builder: (ctx) => Positioned(
+      left: 0,
+      right: 0,
+      bottom: MediaQuery.of(ctx).padding.bottom + 28,
+      child: IgnorePointer(child: Center(child: _ToastCard(message: message, danger: danger))),
+    ),
+  );
+  _activeToast = entry;
+  overlay.insert(entry);
+  _toastTimer = Timer(const Duration(milliseconds: 2600), () {
+    if (_activeToast == entry) {
+      entry.remove();
+      _activeToast = null;
+    }
+  });
+}
+
+class _ToastCard extends StatefulWidget {
+  final String message;
+  final bool danger;
+  const _ToastCard({required this.message, required this.danger});
+  @override
+  State<_ToastCard> createState() => _ToastCardState();
+}
+
+class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 220))..forward();
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final curve = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
+    return FadeTransition(
+      opacity: curve,
+      child: SlideTransition(
+        position: Tween(begin: const Offset(0, 0.25), end: Offset.zero).animate(curve),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 440),
+          margin: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: AppColors.surface2,
+            borderRadius: BorderRadius.circular(R.md),
+            border: Border.all(color: AppColors.border2),
+            boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 22, offset: Offset(0, 8))],
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            AppIcon(widget.danger ? 'alert-triangle' : 'check', size: 15, color: widget.danger ? AppColors.danger : AppColors.accent),
+            const SizedBox(width: 10),
+            Flexible(child: Text(widget.message, style: sans(12.5, color: AppColors.fg1))),
+          ]),
+        ),
+      ),
+    );
+  }
+}
 
 /// Open a markdown link in the external browser (fire-and-forget).
 void openMarkdownLink(String? href) {

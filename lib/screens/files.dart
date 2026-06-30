@@ -88,7 +88,7 @@ class _FileExplorerState extends State<FileExplorer> {
     }
     if (!mounted) return;
     setState(() => _busy = null);
-    if (failed > 0) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete $failed item(s)')));
+    if (failed > 0) toast(context, 'Failed to delete $failed item(s)', danger: true);
     _go(cwd); // refresh + clears selection
   }
 
@@ -100,7 +100,7 @@ class _FileExplorerState extends State<FileExplorer> {
       await widget.client.mkdir('$cwd/$trimmed');
       _go(cwd);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted) toast(context, '$e', danger: true);
     }
   }
 
@@ -110,7 +110,7 @@ class _FileExplorerState extends State<FileExplorer> {
     try {
       res = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true, type: FileType.any);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted) toast(context, '$e', danger: true);
       return;
     }
     if (res == null) return;
@@ -125,14 +125,14 @@ class _FileExplorerState extends State<FileExplorer> {
         await widget.client.uploadFile(bytes, name: f.name, dir: cwd);
         uploaded++;
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${f.name}: $e')));
+        if (mounted) toast(context, '${f.name}: $e', danger: true);
       }
     }
     if (!mounted) return;
     setState(() => _busy = null);
     if (uploaded > 0) {
       _go(cwd);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Uploaded $uploaded file${uploaded == 1 ? '' : 's'}')));
+      toast(context, 'Uploaded $uploaded file${uploaded == 1 ? '' : 's'}');
     }
   }
 
@@ -328,11 +328,11 @@ class _FileViewerState extends State<FileViewer> {
       }
       if (!mounted) return;
       setState(() => _downloading = false);
-      if (message != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      if (message != null) toast(context, message);
     } catch (e) {
       if (!mounted) return;
       setState(() => _downloading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      toast(context, '$e', danger: true);
     }
   }
 

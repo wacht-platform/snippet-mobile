@@ -55,7 +55,7 @@ class _GitScreenState extends State<GitScreen> {
   }
 
   void _toast(String m) {
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+    if (mounted) toast(context, m);
   }
 
   /// Run a write op, surface git's stderr on failure, then reload.
@@ -352,7 +352,7 @@ class _DiffViewState extends State<_DiffView> {
               if (_patch != null && _patch!.isNotEmpty)
                 IconBtn('clipboard', tooltip: 'Copy', onTap: () {
                   Clipboard.setData(ClipboardData(text: _patch!));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Diff copied')));
+                  toast(context, 'Diff copied');
                 }),
             ],
           ),

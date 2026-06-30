@@ -91,19 +91,19 @@ class _EditorScreenState extends State<EditorScreen> {
           _dirty = false;
           _saving = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved')));
+        toast(context, 'Saved');
         return;
       }
       setState(() => _saving = false);
       if (r['conflict'] == true) {
         await _conflictSheet();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r['error'] as String?) ?? 'Save failed')));
+        toast(context, (r['error'] as String?) ?? 'Save failed', danger: true);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        toast(context, '$e', danger: true);
       }
     }
   }

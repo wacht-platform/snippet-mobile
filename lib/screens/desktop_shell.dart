@@ -743,7 +743,7 @@ class _SidebarState extends State<_Sidebar> {
       await c.renameSession(s.id, title);
       widget.onRefreshSessions();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted) toast(context, '$e', danger: true);
     }
   }
 
@@ -771,7 +771,7 @@ class _SidebarState extends State<_Sidebar> {
       widget.onSessionDeleted(s.id);
       widget.onRefreshSessions();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted) toast(context, '$e', danger: true);
     }
   }
 
@@ -881,7 +881,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       _notifBusy = false;
       _notif = err == null ? v : _notif;
     });
-    if (err != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    if (err != null) toast(context, err);
   }
 
   Future<void> _confirmRemove(Instance inst) async {
