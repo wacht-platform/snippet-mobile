@@ -38,6 +38,7 @@ class _DesktopShellState extends State<DesktopShell> {
   // and is shared with the "recent sessions" placeholder.
   List<SessionInfo>? _sessions;
   bool _sessionsLoading = false;
+  bool _drawerOpen = false;
 
   @override
   void initState() {
@@ -216,25 +217,36 @@ class _DesktopShellState extends State<DesktopShell> {
     return LayoutBuilder(builder: (context, c) {
       // Narrow window → keep the native shell but collapse the sidebar to a drawer.
       if (c.maxWidth < kShellCompact) {
-        // Wider drawer on phones; capped so it doesn't swallow the whole screen.
-        final drawerW = (c.maxWidth * 0.86).clamp(280.0, 360.0);
-        return Scaffold(
-          key: _scaffoldKey,
-          backgroundColor: AppColors.canvas,
-          // Wider left-edge swipe target on phones so the sidebar is easy to pull open.
-          drawerEdgeDragWidth: kMobile ? 56 : 24,
-          drawer: Drawer(
-            width: drawerW,
+        // Full-width drawer on phones; a capped one on a shrunk desktop window.
+        final drawerW = kMobile ? c.maxWidth : (c.maxWidth * 0.86).clamp(280.0, 360.0);
+        // Back from an open session: reveal the sessions drawer FIRST, then a
+        // second back exits. (Only intercept when a session is open and the drawer
+        // is closed; from the open drawer or the home placeholder, back exits.)
+        return PopScope(
+          canPop: _drawerOpen || _sessionId == null,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            _scaffoldKey.currentState?.openDrawer();
+          },
+          child: Scaffold(
+            key: _scaffoldKey,
             backgroundColor: AppColors.canvas,
-            shape: const RoundedRectangleBorder(),
-            child: SafeArea(child: _sidebar(onAfterPick: () => _scaffoldKey.currentState?.closeDrawer())),
-          ),
-          // Narrow: the toolbar's sidebar-toggle is at the far left under the
-          // traffic lights, so inset the whole pane below them.
-          body: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.only(top: kMacOS ? kMacTitlebar : 0),
-              child: _mainPane(onMenu: () => _scaffoldKey.currentState?.openDrawer()),
+            onDrawerChanged: (open) => setState(() => _drawerOpen = open),
+            // Wider left-edge swipe target on phones so the sidebar is easy to pull open.
+            drawerEdgeDragWidth: kMobile ? 56 : 24,
+            drawer: Drawer(
+              width: drawerW,
+              backgroundColor: AppColors.canvas,
+              shape: const RoundedRectangleBorder(),
+              child: SafeArea(child: _sidebar(onAfterPick: () => _scaffoldKey.currentState?.closeDrawer())),
+            ),
+            // Narrow: the toolbar's sidebar-toggle is at the far left under the
+            // traffic lights, so inset the whole pane below them.
+            body: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(top: kMacOS ? kMacTitlebar : 0),
+                child: _mainPane(onMenu: () => _scaffoldKey.currentState?.openDrawer()),
+              ),
             ),
           ),
         );
