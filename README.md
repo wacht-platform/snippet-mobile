@@ -4,7 +4,7 @@
 
 **Control your terminal coding agent from your phone or your Mac.**
 
-The remote client for [**snippet**](https://github.com/wacht-platform/snippet), the open-source AI coding agent. Run `snippet serve` on your dev box and drive it from anywhere — chat with the agent, browse and edit files, review git diffs, run commands, and manage sessions, over an authenticated tunnel.
+The remote client for [**snippet**](https://github.com/wacht-platform/snippet-service), the open-source AI coding agent. Run `snippet serve` on your dev box and drive it from anywhere — chat with the agent, browse and edit files, review git diffs, run commands, and manage sessions, over an authenticated tunnel.
 
 One adaptive UI, native on **Android** and **macOS**.
 
@@ -43,7 +43,7 @@ flutter build apk --release --split-per-abi
 
 ## The agent itself
 
-This is just the remote. The engine — the durable coding agent, the `serve` daemon, model configuration — lives in the [**snippet**](https://github.com/wacht-platform/snippet) repo.
+This is just the remote. The engine — the durable coding agent, the `serve` daemon, model configuration — lives in the [**snippet**](https://github.com/wacht-platform/snippet-service) repo.
 
 ## From the team behind Wacht
 

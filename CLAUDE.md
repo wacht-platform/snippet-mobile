@@ -2,7 +2,7 @@
 
 Flutter remote-control client (Android + macOS) for the snippet `serve` daemon
 (Dart package `snippet`, app id `com.snippet`). The daemon lives in the
-[`snippet`](https://github.com/wacht-platform/snippet) repo — see its README for
+[`snippet`](https://github.com/wacht-platform/snippet-service) repo — see its README for
 the daemon API. See **README.md** here for build/run.
 
 ## Conventions
