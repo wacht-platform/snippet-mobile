@@ -444,10 +444,8 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           else
             SnAppBar(
               title: _title.isEmpty ? 'session' : _title,
-              subtitle: s != null && s.workspace.isNotEmpty ? s.workspace : null,
               onBack: () => Navigator.pop(context),
               actions: [
-                IconBtn('home', tooltip: 'Instances', onTap: () => Navigator.popUntil(context, (r) => r.isFirst)),
                 if (running) IconBtn('stop', tooltip: 'Stop', onTap: () => _send({'kind': 'interrupt'})),
                 _menu(s),
               ],
@@ -555,17 +553,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         ] else
           const SizedBox(width: 2),
         Expanded(
-          child: Row(children: [
-            Flexible(
-              child: Text(_title.isEmpty ? 'session' : _title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(13.5, color: AppColors.fg1)),
-            ),
-            if (s != null && s.workspace.isNotEmpty) ...[
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(s.workspace, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(11, color: AppColors.fg4)),
-              ),
-            ],
-          ]),
+          child: Text(_title.isEmpty ? 'session' : _title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(14, weight: FontWeight.w600, color: AppColors.fg1)),
         ),
         if (running) IconBtn('stop', size: 30, iconSize: 16, tooltip: 'Stop', onTap: () => _send({'kind': 'interrupt'})),
         _menu(s),
@@ -709,6 +697,9 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         Text(running ? 'Running' : 'Idle', style: sans(11, weight: FontWeight.w500, color: running ? AppColors.run : AppColors.fg2)),
       ]),
     ];
+    if (s != null && s.workspace.isNotEmpty) {
+      chips.add(_StatMeta(icon: 'folder', label: lastPathSegment(s.workspace, ifEmpty: s.workspace)));
+    }
     if (_modelLabel != null) chips.add(_StatMeta(icon: 'cpu', label: _modelLabel!));
     if (s != null) {
       if (s.contextWindow > 0 && s.lastPromptTokens > 0) {
