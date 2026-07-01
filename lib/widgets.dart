@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -140,28 +141,28 @@ void openMarkdownLink(String? href) {
 /// Themed markdown stylesheet for agent messages.
 MarkdownStyleSheet markdownStyle(BuildContext context) {
   return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-    p: sans(13.5, height: 1.5, color: AppColors.fg1),
+    p: sans(16, height: 1.5, color: AppColors.fg1),
     pPadding: EdgeInsets.zero,
-    a: sans(13.5, height: 1.5, color: AppColors.accent),
-    h1: sans(18, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1),
+    a: sans(16, height: 1.5, color: AppColors.accent),
+    h1: sans(21, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1),
     h1Padding: const EdgeInsets.only(top: 6, bottom: 2),
-    h2: sans(16, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1),
-    h3: sans(14.5, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1),
-    code: mono(12, color: AppColors.fg1).copyWith(backgroundColor: AppColors.surface2),
+    h2: sans(18.5, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1),
+    h3: sans(16.5, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1),
+    code: mono(13.5, color: AppColors.fg1).copyWith(backgroundColor: AppColors.surface2),
     codeblockPadding: const EdgeInsets.all(12),
     codeblockDecoration: BoxDecoration(
       color: AppColors.surface2,
       border: Border.all(color: AppColors.border),
       borderRadius: BorderRadius.circular(R.sm),
     ),
-    blockquote: sans(13.5, height: 1.5, color: AppColors.fg2),
+    blockquote: sans(15.5, height: 1.5, color: AppColors.fg2),
     blockquoteDecoration: BoxDecoration(
       color: AppColors.surface2,
       borderRadius: BorderRadius.circular(R.xs),
       border: const Border(left: BorderSide(color: AppColors.accentLine, width: 3)),
     ),
-    listBullet: sans(13.5, height: 1.5, color: AppColors.fg1),
-    tableBody: sans(12.5, color: AppColors.fg1),
+    listBullet: sans(16, height: 1.5, color: AppColors.fg1),
+    tableBody: sans(14, color: AppColors.fg1),
     horizontalRuleDecoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
   );
 }
@@ -463,7 +464,8 @@ class Bubble extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('YOU', style: sans(10, color: AppColors.fg1, spacing: 0.8)),
               const SizedBox(height: 4),
-              SelectableText(shown, style: sans(13.5, height: 1.5, color: AppColors.fg2)),
+              SelectableText(shown, style: sans(16, height: 1.5, color: AppColors.fg2)),
+              _CopyButton(text: shown),
             ]),
           ),
         ]),
@@ -481,7 +483,38 @@ class Bubble extends StatelessWidget {
           onTapLink: (txt, href, title) => openMarkdownLink(href),
         ),
       ),
+      _CopyButton(text: shown),
     ]);
+  }
+}
+
+/// Small "Copy" affordance under a message — copies the text to the clipboard.
+class _CopyButton extends StatelessWidget {
+  final String text;
+  const _CopyButton({required this.text});
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(R.xs),
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: text));
+            toast(context, 'Copied');
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.copy_rounded, size: 12.5, color: AppColors.fg4),
+              const SizedBox(width: 4),
+              Text('Copy', style: sans(11, color: AppColors.fg4)),
+            ]),
+          ),
+        ),
+      ),
+    );
   }
 }
 
