@@ -1,29 +1,34 @@
-# snippet-mobile
+<div align="center">
 
-A Flutter remote-control client for the [snippet](https://github.com/wacht-platform/snippet)
-coding agent. Run `snippet serve` on a machine and drive it from your phone or
-Mac: browse and edit files, view git diffs, run commands, manage checkpoints, and
-chat with the agent — over an authenticated tunnel.
+# snippet — mobile & desktop
 
-Runs on **Android** and **macOS** from one adaptive UI (two-pane when wide, a
-collapsed sidebar drawer when narrow).
+**Control your terminal coding agent from your phone or your Mac.**
+
+The remote client for [**snippet**](https://github.com/wacht-platform/snippet), the open-source AI coding agent. Run `snippet serve` on your dev box and drive it from anywhere — chat with the agent, browse and edit files, review git diffs, run commands, and manage sessions, over an authenticated tunnel.
+
+One adaptive UI, native on **Android** and **macOS**.
+
+_Built by the team behind [Wacht](https://wacht.dev) — open-source infrastructure for AI-native apps._
+
+</div>
+
+---
+
+Your coding agent runs on your machine; this app is the window into it. Start a task at your desk, then pick it up from the couch — same session, live. Nothing runs in our cloud: the app talks directly to *your* `serve` daemon over a token-authenticated [cloudflared](https://github.com/cloudflare/cloudflared) tunnel.
 
 ## Features
 
-- **Sessions** across every connected machine — open, resume, rename, delete.
-- **Chat** with the agent: streaming replies, inline tool activity, approvals.
-- **Files** — browse, view with syntax highlighting, edit (with conflict
-  detection), upload, download, create folders, and select/delete.
-- **Git** — status, diffs, stage/commit/branch and more, scoped to a session.
-- **Attachments** — send images and files (camera/photos/files, drag-and-drop on
-  desktop), up to 10 at a time.
+- **Sessions across every machine** you've connected — open, resume, rename, delete.
+- **Chat** with the agent: streaming replies, inline tool activity, approvals, and steering mid-run.
+- **Files** — browse, view with syntax highlighting, edit (with conflict detection), upload, download, create folders, and select/delete — with or without a session open.
+- **Git** — status, per-file diffs, stage/commit, branch switch, push/pull — scoped to a folder or a session.
+- **Per-chat model** — switch the model for a conversation from your phone; set reasoning effort.
+- **Attachments** — send images and files (camera / photos / files, drag-and-drop on desktop).
 - **Notifications** when a session needs input or finishes (Android + macOS).
 
 ## Connecting
 
-On the daemon machine, run `snippet serve` — it prints a QR code and a connection
-string (`{url, token}`). In the app, add an instance by scanning the QR or pasting
-the string. The app talks to the daemon at `http(s)://host[:port]/?token=<token>`.
+On your dev machine, run `snippet serve` — it prints a QR code and a connection string (`{url, token}`). In the app, add an instance by pasting it. That's it; you're driving your machine's agent.
 
 ## Build & run
 
@@ -32,13 +37,18 @@ Requires the [Flutter SDK](https://docs.flutter.dev/get-started/install).
 ```sh
 flutter pub get
 flutter run -d macos        # desktop
-flutter run                 # a connected Android device/emulator
-flutter analyze lib         # static analysis
+flutter run                 # a connected Android device / emulator
 flutter build apk --release --split-per-abi
 ```
 
+## The agent itself
+
+This is just the remote. The engine — the durable coding agent, the `serve` daemon, model configuration — lives in the [**snippet**](https://github.com/wacht-platform/snippet) repo.
+
+## From the team behind Wacht
+
+A project from **[Wacht](https://wacht.dev)** — open-source infrastructure for AI-native apps (identity, organizations, machine auth, webhooks, and an agent runtime). Building AI-native apps? → **[wacht.dev](https://wacht.dev)**.
+
 ## License
 
-Copyright (C) 2026 snipextt. Licensed under the **GNU Affero General Public
-License v3.0 or later** (AGPL-3.0-or-later); see [LICENSE](LICENSE). Contributions
-are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+Copyright (C) 2026 snipextt. Licensed under **AGPL-3.0-or-later** — see [LICENSE](LICENSE). Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
