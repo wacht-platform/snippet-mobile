@@ -16,6 +16,8 @@ const _providers = [
 
 bool _needsBaseUrl(String p) => p == 'openai-compatible';
 bool _defaultImages(String p) => p == 'anthropic' || p == 'gemini' || p == 'openai' || p == 'chatgpt';
+// Providers that go through the OpenAI-compatible adapter, where `stream` applies.
+bool _usesOpenAiAdapter(String p) => p == 'openai' || p == 'openai-compatible' || p == 'openrouter';
 
 class ModelEditorScreen extends StatefulWidget {
   final DaemonClient client;
@@ -37,6 +39,7 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
   bool _showKey = false;
   late bool _images;
   bool _active = false;
+  bool _stream = false;
   String _effort = ''; // '' = provider default
   bool _busy = false;
   String? _error;
@@ -55,6 +58,7 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
     _ctx = TextEditingController(text: (e?.contextWindow ?? 0) > 0 ? '${e!.contextWindow}' : '');
     _images = _defaultImages(_provider);
     _active = e?.active ?? !_isEdit;
+    _stream = e?.stream ?? false;
     _effort = e?.reasoningEffort ?? '';
   }
 
@@ -84,6 +88,7 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
         reasoningEffort: _effort.isEmpty ? null : _effort,
         supportsImages: _images,
         contextWindow: int.tryParse(_ctx.text.trim()),
+        stream: _stream,
         setActive: _active,
       );
       if (mounted) Navigator.pop(context, true);
@@ -170,6 +175,10 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
                   ),
                 const SizedBox(height: 16),
                 AppToggle(on: _images, onChanged: (v) => setState(() => _images = v), label: 'Supports images', sub: 'Send screenshots and diagrams to this model'),
+                if (_usesOpenAiAdapter(_provider)) ...[
+                  const SizedBox(height: 8),
+                  AppToggle(on: _stream, onChanged: (v) => setState(() => _stream = v), label: 'Stream responses', sub: 'Turn on for models that return nothing otherwise (e.g. MiniMax on NVIDIA NIM)'),
+                ],
                 const SizedBox(height: 8),
                 AppToggle(on: _active, onChanged: (v) => setState(() => _active = v), label: 'Set as active', sub: 'Use this model for new sessions'),
                 if (_error != null) ...[

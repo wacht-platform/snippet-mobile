@@ -120,6 +120,7 @@ class DaemonClient {
     String? reasoningEffort,
     bool? supportsImages,
     int? contextWindow,
+    bool? stream,
     bool setActive = false,
   }) async {
     final body = <String, dynamic>{
@@ -135,6 +136,7 @@ class DaemonClient {
     }
     if (supportsImages != null) body['supports_images'] = supportsImages;
     if (contextWindow != null && contextWindow > 0) body['context_window'] = contextWindow;
+    if (stream != null) body['stream'] = stream;
     final r = await http.put(_uri('/config/profile'),
         headers: _json, body: jsonEncode(body));
     if (r.statusCode != 200) throw _err('save profile', r);

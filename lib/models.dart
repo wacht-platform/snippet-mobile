@@ -39,6 +39,7 @@ class ModelProfile {
   final bool active;
   final int contextWindow;
   final String reasoningEffort; // '' = provider default
+  final bool stream; // force the streaming wire protocol (stream-only models)
 
   ModelProfile.fromJson(Map<String, dynamic> j)
       : name = j['name'] as String? ?? '',
@@ -48,7 +49,8 @@ class ModelProfile {
         hasKey = j['has_key'] == true,
         active = j['active'] == true,
         contextWindow = (j['context_window'] as num?)?.toInt() ?? 0,
-        reasoningEffort = j['reasoning_effort'] as String? ?? '';
+        reasoningEffort = j['reasoning_effort'] as String? ?? '',
+        stream = j['stream'] == true;
 }
 
 class ServerConfig {
