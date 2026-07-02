@@ -100,7 +100,9 @@ Future<void> initNotifications() async {
     'idle' => ('${inst.label} stopped', title),
     _ => (inst.label, title),
   };
-  final payload = jsonEncode({'url': inst.url, 'token': inst.token, 'name': inst.label, 'session': session, 'title': title});
+  // No token in the payload: the OS persists notification records and exposes
+  // them to listeners — the tap handler re-resolves the token from the store.
+  final payload = jsonEncode({'url': inst.url, 'name': inst.label, 'session': session, 'title': title});
   return (head: head, body: body, payload: payload);
 }
 
@@ -220,8 +222,23 @@ class _DesktopWatcher {
     _running = true;
     _instances = await InstanceStore().load();
     _connectAll();
-    _reconnect ??= Timer.periodic(const Duration(seconds: 20), (_) {
-      if (_running) _connectAll();
+    // Reload the instance list each cycle — machines added after start must
+    // notify, removed ones must stop (their stale channels are pruned).
+    _reconnect ??= Timer.periodic(const Duration(seconds: 20), (_) async {
+      if (!_running) return;
+      _instances = await InstanceStore().load();
+      if (!_running) return;
+      _pruneRemoved();
+      _connectAll();
+    });
+  }
+
+  void _pruneRemoved() {
+    final live = _instances.map((i) => i.url).toSet();
+    _channels.removeWhere((url, ch) {
+      if (live.contains(url)) return false;
+      ch.sink.close();
+      return true;
     });
   }
 
@@ -346,9 +363,9 @@ class _NotifTaskHandler extends TaskHandler {
           priority: Priority.high,
         ),
       ),
+      // No token here — see _notifContent; the tap handler resolves it from the store.
       payload: jsonEncode({
         'url': inst.url,
-        'token': inst.token,
         'name': inst.label,
         'session': session,
         'title': title,
@@ -367,7 +384,22 @@ class _NotifTaskHandler extends TaskHandler {
   }
 
   @override
-  void onRepeatEvent(DateTime timestamp) => _connectAll(); // reconnect dropped
+  void onRepeatEvent(DateTime timestamp) {
+    // Reload instances each cycle (added machines start notifying, removed ones
+    // stop), then reconnect any dropped channels.
+    InstanceStore().load().then((items) {
+      _instances = items;
+      final live = _instances.map((i) => i.url).toSet();
+      _channels.removeWhere((url, ch) {
+        if (live.contains(url)) return false;
+        ch.sink.close();
+        return true;
+      });
+      _connectAll();
+    }).catchError((_) {
+      _connectAll();
+    });
+  }
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {

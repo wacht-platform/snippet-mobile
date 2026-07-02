@@ -37,6 +37,7 @@ class _GitScreenState extends State<GitScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return; // _op's finally can land after the panel closed
     setState(() {
       _loading = true;
       _error = null;
@@ -79,8 +80,10 @@ class _GitScreenState extends State<GitScreen> {
     } catch (e) {
       _toast('$e');
     } finally {
-      if (mounted) setState(() => _busy = false);
-      await _load();
+      if (mounted) {
+        setState(() => _busy = false);
+        await _load();
+      }
     }
   }
 
@@ -346,6 +349,7 @@ class _DiffViewState extends State<_DiffView> {
   Widget build(BuildContext context) {
     final name = widget.file.split('/').last;
     return Scaffold(
+      backgroundColor: AppColors.canvas,
       body: SafeArea(
         bottom: false,
         child: Column(children: [

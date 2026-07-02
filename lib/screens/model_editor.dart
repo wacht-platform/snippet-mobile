@@ -56,10 +56,15 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
     _baseUrl = TextEditingController(text: e?.baseUrl ?? '');
     _model = TextEditingController(text: e?.model ?? '');
     _ctx = TextEditingController(text: (e?.contextWindow ?? 0) > 0 ? '${e!.contextWindow}' : '');
-    _images = _defaultImages(_provider);
+    // Editing keeps the profile's actual flag — falling back to the provider
+    // default silently reset it on every unrelated edit.
+    _images = e?.supportsImages ?? _defaultImages(_provider);
     _active = e?.active ?? !_isEdit;
     _stream = e?.stream ?? false;
     _effort = e?.reasoningEffort ?? '';
+    // The Save button's enabled state depends on this field; without a listener
+    // typing never rebuilt, leaving Save stuck disabled on desktop.
+    _model.addListener(() => setState(() {}));
   }
 
   @override
@@ -85,7 +90,9 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
         baseUrl: _needsBaseUrl(_provider) ? _baseUrl.text.trim() : null,
         model: _model.text.trim(),
         apiKey: _key.text.trim().isEmpty ? null : _key.text.trim(),
-        reasoningEffort: _effort.isEmpty ? null : _effort,
+        // Always send it: '' explicitly clears back to provider default (an
+        // omitted field means "keep", so Default could never un-set an effort).
+        reasoningEffort: _effort,
         supportsImages: _images,
         contextWindow: int.tryParse(_ctx.text.trim()),
         stream: _stream,

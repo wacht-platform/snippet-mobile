@@ -10,6 +10,9 @@ import '../platform.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
+/// Full-screen "Add machine": a live QR scanner on phones (desktop shows an
+/// instruction block instead), plus a fixed paste-a-connection-string bar at
+/// the bottom. Pops with the verified [Instance].
 class AddInstanceScreen extends StatefulWidget {
   const AddInstanceScreen({super.key});
   @override
@@ -47,6 +50,7 @@ class _AddInstanceScreenState extends State<AddInstanceScreen> with WidgetsBindi
     super.dispose();
   }
 
+  // Accepts `https://host?token=…` or JSON `{url, token}`.
   (String, String)? _parse(String raw) {
     raw = raw.trim();
     final uri = Uri.tryParse(raw);
@@ -92,43 +96,59 @@ class _AddInstanceScreenState extends State<AddInstanceScreen> with WidgetsBindi
       body: SafeArea(
         bottom: false,
         child: Column(children: [
-          SnAppBar(title: 'Add instance', onBack: () => Navigator.pop(context)),
-          Expanded(child: _scanArea()),
-          _pasteBar(),
+          SnAppBar(title: 'Add machine', onBack: () => Navigator.pop(context)),
+          Expanded(child: kMobile ? _scanArea() : _desktopIntro()),
+          _bottomBar(),
+        ]),
+      ),
+    );
+  }
+
+  // Desktop has no camera flow — point at `snippet serve` + the paste bar.
+  Widget _desktopIntro() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(color: AppColors.surface2, border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(R.card)),
+            child: const AppIcon('terminal', size: 24, color: AppColors.fg3),
+          ),
+          const SizedBox(height: 14),
+          Text('Connect a machine', style: display(18)),
+          const SizedBox(height: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: Text.rich(
+              TextSpan(style: sans(12.5, height: 1.5, color: AppColors.fg3), children: [
+                const TextSpan(text: 'Run '),
+                TextSpan(text: 'snippet serve', style: mono(12, color: AppColors.fg2)),
+                const TextSpan(text: ' on your machine and paste the connection string it prints below.'),
+              ]),
+              textAlign: TextAlign.center,
+            ),
+          ),
         ]),
       ),
     );
   }
 
   Widget _scanArea() {
-    if (!kMobile) {
-      // No camera/QR on desktop — paste a connection string below.
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 56, height: 56, decoration: BoxDecoration(color: AppColors.surface2, border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(16)), child: const AppIcon('clipboard', size: 24, color: AppColors.fg3)),
-            const SizedBox(height: 12),
-            Text('Add a connection', style: sans(15, weight: FontWeight.w600, color: AppColors.fg1)),
-            const SizedBox(height: 8),
-            ConstrainedBox(constraints: const BoxConstraints(maxWidth: 300), child: Text('Paste your snippet serve URL + token below (the connection string printed by `snippet serve`).', textAlign: TextAlign.center, style: sans(12.5, height: 1.5, color: AppColors.fg3))),
-          ]),
-        ),
-      );
-    }
     final perm = _perm;
     if (perm == null) {
-      return const ColoredBox(color: Color(0xFF111111), child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))));
+      return const ColoredBox(color: AppColors.surface1, child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))));
     }
     if (!perm.isGranted) {
       final permanent = perm.isPermanentlyDenied || perm.isRestricted;
       return ColoredBox(
-        color: const Color(0xFF111111),
+        color: AppColors.surface1,
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(32),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 56, height: 56, decoration: BoxDecoration(color: AppColors.surface2, border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(16)), child: const AppIcon('camera-off', size: 26, color: AppColors.fg3)),
+              Container(width: 56, height: 56, decoration: BoxDecoration(color: AppColors.surface2, border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(R.card)), child: const AppIcon('camera-off', size: 26, color: AppColors.fg3)),
               const SizedBox(height: 12),
               Text('Camera access needed', style: sans(15, weight: FontWeight.w600, color: AppColors.fg1)),
               const SizedBox(height: 8),
@@ -146,46 +166,66 @@ class _AddInstanceScreenState extends State<AddInstanceScreen> with WidgetsBindi
         ),
       );
     }
-    return Stack(alignment: Alignment.center, children: [
-      ReaderWidget(
-        showScannerOverlay: false,
-        showGallery: false,
-        tryHarder: true,
-        tryInverted: true,
-        cropPercent: 0.7,
-        scanDelay: const Duration(milliseconds: 300),
-        onScan: (code) {
-          final raw = code.text;
-          if (code.isValid && raw != null && raw.trim().isNotEmpty) _connect(raw);
-        },
+    // Rounded viewport, Claude-card style, with the scan reticle + caption inside.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(alignment: Alignment.center, fit: StackFit.expand, children: [
+          ReaderWidget(
+            showScannerOverlay: false,
+            showGallery: false,
+            tryHarder: true,
+            tryInverted: true,
+            cropPercent: 0.7,
+            scanDelay: const Duration(milliseconds: 300),
+            onScan: (code) {
+              final raw = code.text;
+              if (code.isValid && raw != null && raw.trim().isNotEmpty) _connect(raw);
+            },
+          ),
+          const IgnorePointer(child: Center(child: _Reticle())),
+          Positioned(
+            bottom: 18,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(color: Colors.black54, border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(99)),
+                child: Text.rich(
+                  TextSpan(style: sans(12.5, color: AppColors.fg1), children: [
+                    const TextSpan(text: 'Scan the QR from '),
+                    TextSpan(text: 'snippet serve', style: mono(12, color: AppColors.fg1)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ]),
       ),
-      const IgnorePointer(child: _Reticle()),
-      Positioned(
-        bottom: 26,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(color: Colors.black54, border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(99)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const AppIcon('scan', size: 15, color: AppColors.fg1),
-            const SizedBox(width: 8),
-            Text('Point at the snippet serve QR', style: sans(12.5, color: AppColors.fg1)),
-          ]),
-        ),
-      ),
-    ]);
+    );
   }
 
-  Widget _pasteBar() {
+  Widget _bottomBar() {
+    final empty = _paste.text.trim().isEmpty;
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
+      padding: EdgeInsets.fromLTRB(16, 14, 16, 14 + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(color: AppColors.bg, border: Border(top: BorderSide(color: AppColors.border))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SectionLabel('Or paste a connection string'),
-        const SizedBox(height: 10),
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: AppField(controller: _paste, mono: true, icon: 'clipboard', hint: 'https://host/?token=…', onSubmitted: _connect)),
-          const SizedBox(width: 8),
-          Btn(_busy ? '…' : 'Go', disabled: _busy || _paste.text.trim().isEmpty, onTap: () => _connect(_paste.text)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Row(children: [
+          Expanded(child: AppField(controller: _paste, mono: true, hint: 'Paste connection string or URL', onSubmitted: _connect)),
+          const SizedBox(width: 10),
+          if (_busy)
+            Container(
+              width: kMobile ? 48 : 36,
+              height: kMobile ? 48 : 36,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+              child: const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accentFg)),
+            )
+          else
+            PillBtn('Connect', onTap: empty ? null : () => _connect(_paste.text)),
         ]),
         if (_error != null) ...[const SizedBox(height: 10), Text(_error!, style: sans(11.5, color: AppColors.danger))],
       ]),

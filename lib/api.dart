@@ -25,10 +25,9 @@ class DaemonClient {
 
   Map<String, String> get _json => {'content-type': 'application/json'};
 
-  Future<bool> health() async {
+  Future<bool> health({Duration timeout = const Duration(seconds: 2)}) async {
     try {
-      final r =
-          await http.get(_uri('/health')).timeout(const Duration(seconds: 12));
+      final r = await http.get(_uri('/health')).timeout(timeout);
       return r.statusCode == 200;
     } catch (_) {
       return false;
@@ -131,7 +130,9 @@ class DaemonClient {
     if (name != null && name.isNotEmpty) body['name'] = name;
     if (baseUrl != null && baseUrl.isNotEmpty) body['base_url'] = baseUrl;
     if (apiKey != null && apiKey.isNotEmpty) body['api_key'] = apiKey;
-    if (reasoningEffort != null && reasoningEffort.isNotEmpty) {
+    // '' is meaningful: the daemon clears the effort on an explicit empty
+    // string and keeps the current value when the field is omitted.
+    if (reasoningEffort != null) {
       body['reasoning_effort'] = reasoningEffort;
     }
     if (supportsImages != null) body['supports_images'] = supportsImages;

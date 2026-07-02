@@ -40,6 +40,7 @@ class ModelProfile {
   final int contextWindow;
   final String reasoningEffort; // '' = provider default
   final bool stream; // force the streaming wire protocol (stream-only models)
+  final bool? supportsImages; // null on daemons that don't report it yet
 
   ModelProfile.fromJson(Map<String, dynamic> j)
       : name = j['name'] as String? ?? '',
@@ -50,7 +51,8 @@ class ModelProfile {
         active = j['active'] == true,
         contextWindow = (j['context_window'] as num?)?.toInt() ?? 0,
         reasoningEffort = j['reasoning_effort'] as String? ?? '',
-        stream = j['stream'] == true;
+        stream = j['stream'] == true,
+        supportsImages = j['supports_images'] is bool ? j['supports_images'] as bool : null;
 }
 
 class ServerConfig {

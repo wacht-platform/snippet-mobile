@@ -2,44 +2,44 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax_plus/iconsax_plus.dart';
 
-/// snippet — Wacht design system (dark), one electric-blue accent.
+/// snippet — Wacht design system (dark), one coral accent.
 /// Resolved dark-theme tokens from the design handoff.
-// Zinc dark with an amber/gold accent. OKLCH tokens → sRGB.
+// Warm charcoal with a coral/terracotta accent.
 class AppColors {
-  static const bg = Color(0xFF09090B); // --background (sidebar / shell)
-  static const canvas = Color(0xFF222226); // chat reading area (lighter than bg)
-  static const surface1 = Color(0xFF18181B); // --card / --popover / --sidebar
-  static const surface2 = Color(0xFF27272A); // --muted (inputs, chips)
-  static const surface3 = Color(0xFF37373B); // pressed / hover raise
+  static const bg = Color(0xFF0F0E0C); // --background (sidebar / shell)
+  static const canvas = Color(0xFF201F1C); // chat reading area (lighter than bg)
+  static const surface1 = Color(0xFF191815); // --card / --popover / --sidebar
+  static const surface2 = Color(0xFF262522); // --muted (inputs, chips)
+  static const surface3 = Color(0xFF34322E); // pressed / hover raise
 
-  static const fg1 = Color(0xFFFAFAFA); // --foreground
-  static const fg2 = Color(0xFFCACAD1); // secondary text, icons
-  static const fg3 = Color(0xFF9F9FA9); // --muted-foreground
-  static const fg4 = Color(0xFF797981); // faint icons, disabled
+  static const fg1 = Color(0xFFF5F4F0); // --foreground
+  static const fg2 = Color(0xFFCFCCC4); // secondary text, icons
+  static const fg3 = Color(0xFFA19E96); // --muted-foreground
+  static const fg4 = Color(0xFF7B786F); // faint icons, disabled
 
   static const border = Color(0x1AFFFFFF); // --border (white 10%)
   static const border2 = Color(0x26FFFFFF); // --input (white 15%)
 
-  // Amber/gold accent (bright for a dark UI): fills carry dark text.
-  static const accent = Color(0xFFFE9A00);
-  static const accentHover = Color(0xFFFFB224);
-  static const accentFg = Color(0xFF461901);
-  static const accentBg = Color(0x28FE9A00); // ~16%
-  static const accentLine = Color(0x66FE9A00); // 40%
-  static const accentRing = Color(0x4DFE9A00); // 30%
+  // Coral/terracotta accent: fills carry dark text.
+  static const accent = Color(0xFFD97757);
+  static const accentHover = Color(0xFFE58C6F);
+  static const accentFg = Color(0xFF2B1006);
+  static const accentBg = Color(0x28D97757); // ~16%
+  static const accentLine = Color(0x66D97757); // 40%
+  static const accentRing = Color(0x4DD97757); // 30%
 
-  // Status (on-theme: amber, no green); red for errors.
-  static const ok = Color(0xFFFE9A00);
-  static const okBg = Color(0x28FE9A00);
-  static const run = Color(0xFFFFB224);
-  static const runBg = Color(0x26FFB224);
+  // Status (on-theme: coral, no green); red for errors.
+  static const ok = Color(0xFFD97757);
+  static const okBg = Color(0x28D97757);
+  static const run = Color(0xFFE58C6F);
+  static const runBg = Color(0x26E58C6F);
   static const danger = Color(0xFFFF6467); // --destructive
   static const dangerBg = Color(0x26FF6467);
 
-  // diff line tints — additions amber (no green), deletions red.
-  static const diffAddBg = Color(0x20FE9A00);
+  // diff line tints — additions coral (no green), deletions red.
+  static const diffAddBg = Color(0x20D97757);
   static const diffDelBg = Color(0x20FF6467);
-  static const diffAddFg = Color(0xFFFFC667);
+  static const diffAddFg = Color(0xFFF0A98C);
   static const diffDelFg = Color(0xFFFF9B98);
   static const diffGutter = Color(0xFF52525B);
 }
@@ -68,6 +68,17 @@ TextStyle sans(double size,
       fontWeight: _cap(weight),
       height: height,
       letterSpacing: spacing,
+      color: color,
+    );
+
+/// Large display titles (page headers). Space Grotesk — a distinct display
+/// face; regular weight, tighter tracking.
+TextStyle display(double size, {Color color = AppColors.fg1, double? height}) =>
+    GoogleFonts.spaceGrotesk(
+      fontSize: size,
+      fontWeight: FontWeight.w400,
+      height: height,
+      letterSpacing: -0.5,
       color: color,
     );
 
@@ -102,6 +113,14 @@ ThemeData buildAppTheme() {
     dividerColor: AppColors.border,
     splashColor: AppColors.surface3.withValues(alpha: 0.4),
     highlightColor: AppColors.surface3.withValues(alpha: 0.3),
+    hoverColor: AppColors.surface3.withValues(alpha: 0.35), // desktop hover raise on every InkWell
+    // Popovers/menus: surface1 card look everywhere (never default Material).
+    popupMenuTheme: PopupMenuThemeData(
+      color: AppColors.surface1,
+      elevation: 8,
+      shadowColor: Colors.black54,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.md), side: const BorderSide(color: AppColors.border2)),
+    ),
     textTheme: _allRegular(GoogleFonts.geistTextTheme(base.textTheme)
         .apply(bodyColor: AppColors.fg1, displayColor: AppColors.fg1)),
     // Subtle dividers everywhere (incl. PopupMenuDivider) — no bright lines.

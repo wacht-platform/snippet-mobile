@@ -82,14 +82,16 @@ class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMi
 }
 
 /// Open a markdown link in the external browser (fire-and-forget).
-/// Compact relative time like "5m", "3h", "2d", "4mo" (empty for 0).
+/// Compact relative time like "now", "5m", "3h", "2d", "4mo" (empty for 0).
 String relativeTime(int unixSec) {
   if (unixSec == 0) return '';
   final d = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(unixSec * 1000));
-  if (d.inMinutes < 60) return '${d.inMinutes < 1 ? 1 : d.inMinutes}m';
+  if (d.inMinutes < 1) return 'now';
+  if (d.inMinutes < 60) return '${d.inMinutes}m';
   if (d.inHours < 24) return '${d.inHours}h';
   if (d.inDays < 30) return '${d.inDays}d';
-  return '${(d.inDays / 30).floor()}mo';
+  if (d.inDays < 365) return '${(d.inDays / 30).floor()}mo';
+  return '${(d.inDays / 365).floor()}y';
 }
 
 /// Human-readable byte size (B / KB / MB). Accepts an int or anything parseable.
@@ -337,6 +339,39 @@ class Btn extends StatelessWidget {
               border: bd != null ? Border.all(color: bd) : null,
             ),
             child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Accent pill action (Claude-style primary affordance).
+class PillBtn extends StatelessWidget {
+  final String label;
+  final String? icon;
+  final VoidCallback? onTap;
+  const PillBtn(this.label, {super.key, this.icon, this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: onTap == null ? 0.45 : 1,
+      child: Material(
+        color: AppColors.accent,
+        borderRadius: BorderRadius.circular(99),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(99),
+          child: Container(
+            height: kMobile ? 48 : 36,
+            padding: EdgeInsets.symmetric(horizontal: kMobile ? 20 : 16),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (icon != null) ...[
+                AppIcon(icon!, size: kMobile ? 18 : 16, color: AppColors.accentFg),
+                const SizedBox(width: 8),
+              ],
+              Text(label, style: sans(kMobile ? 14.5 : 13, weight: FontWeight.w500, color: AppColors.accentFg)),
+            ]),
           ),
         ),
       ),
@@ -715,7 +750,7 @@ class SnAppBar extends StatelessWidget {
         const SizedBox(width: 4),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(18, weight: FontWeight.w600, spacing: -0.16, color: AppColors.fg1)),
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: display(17)),
             if (subtitle != null)
               Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(11.5, color: AppColors.fg3)),
           ]),

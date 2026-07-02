@@ -25,7 +25,10 @@ class _ModelsScreenState extends State<ModelsScreen> {
     _future = widget.client.getConfig();
   }
 
-  void _refresh() => setState(() { _future = widget.client.getConfig(); });
+  void _refresh() {
+    if (!mounted) return;
+    setState(() { _future = widget.client.getConfig(); });
+  }
 
   Future<void> _run(Future<void> Function() op, String onError) async {
     try {

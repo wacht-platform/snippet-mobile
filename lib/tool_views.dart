@@ -849,7 +849,7 @@ class _HiCodeBlockState extends State<_HiCodeBlock> {
         controller: _c,
         readOnly: true,
         wordWrap: false,
-        style: codeEditorStyle(widget.filename),
+        style: codeEditorStyle(widget.filename, background: AppColors.bg),
         indicatorBuilder: (context, editingController, chunkController, notifier) {
           return Row(children: [
             DefaultCodeLineNumber(controller: editingController, notifier: notifier),

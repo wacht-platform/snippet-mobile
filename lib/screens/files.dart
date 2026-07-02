@@ -100,6 +100,7 @@ class _FileExplorerState extends State<FileExplorer> {
     if (trimmed == null || trimmed.isEmpty) return;
     try {
       await widget.client.mkdir('$cwd/$trimmed');
+      if (!mounted) return;
       _go(cwd);
     } catch (e) {
       if (mounted) toast(context, '$e', danger: true);
@@ -401,6 +402,7 @@ class _FileViewerState extends State<FileViewer> {
   Widget build(BuildContext context) {
     final f = _f;
     return Scaffold(
+      backgroundColor: AppColors.canvas,
       body: SafeArea(
         bottom: false,
         child: Column(children: [

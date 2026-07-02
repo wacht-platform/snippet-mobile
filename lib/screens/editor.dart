@@ -43,8 +43,18 @@ class _EditorScreenState extends State<EditorScreen> {
     super.dispose();
   }
 
+  // Whether the file arrived with CRLF endings (restored on save).
+  bool _crlf = false;
+
+  String _normalized(String s) => s.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+
+  String _forSave() {
+    final text = _normalized(_controller.text);
+    return _crlf ? text.replaceAll('\n', '\r\n') : text;
+  }
+
   void _onChanged() {
-    final d = _controller.text != _initial;
+    final d = _normalized(_controller.text) != _initial;
     if (d != _dirty && mounted) setState(() => _dirty = d);
   }
 
@@ -60,7 +70,11 @@ class _EditorScreenState extends State<EditorScreen> {
         });
         return;
       }
-      _initial = f.content;
+      // The editor normalizes to LF internally: remember the file's dominant
+      // line ending so the dirty check compares like-for-like and save restores
+      // the original style instead of rewriting every line ending.
+      _crlf = f.content.contains('\r\n');
+      _initial = _normalized(f.content);
       _hash = f.hash;
       _controller.text = f.content;
       setState(() {
@@ -82,10 +96,10 @@ class _EditorScreenState extends State<EditorScreen> {
     if (_saving) return;
     setState(() => _saving = true);
     try {
-      final r = await widget.client.writeFile(widget.path, _controller.text, prevHash: force ? null : _hash);
+      final r = await widget.client.writeFile(widget.path, _forSave(), prevHash: force ? null : _hash);
       if (!mounted) return;
       if (r['ok'] == true) {
-        _initial = _controller.text;
+        _initial = _normalized(_controller.text);
         _hash = r['hash'] as String? ?? _hash;
         setState(() {
           _dirty = false;
@@ -159,6 +173,7 @@ class _EditorScreenState extends State<EditorScreen> {
         if (!didPop) _maybePop();
       },
       child: Scaffold(
+        backgroundColor: AppColors.canvas,
         body: SafeArea(
           bottom: false,
           child: Column(children: [

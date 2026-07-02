@@ -37,6 +37,15 @@ class SessionScreen extends StatefulWidget {
 
 class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserver {
   WebSocketChannel? _channel;
+  StreamSubscription<dynamic>? _sub;
+  // Outbound payloads queued while the socket is down; flushed in order on the
+  // next healthy frame (silently dropping sends lost user messages/approvals).
+  final List<String> _outbox = [];
+  // The open-session suppression key THIS screen registered. Session switches
+  // mount the new screen before disposing the old one, so dispose must only
+  // clear the registration if it still owns it.
+  static String _registeredOpenKey = '';
+  late final String _openKey;
   HarnessState? _state;
   String? _connError;
   String? _modelLabel;
@@ -72,7 +81,9 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     WidgetsBinding.instance.addObserver(this);
     _connect();
     _loadModel();
-    reportOpenSession('${widget.client.baseUrl}|${widget.sessionId}');
+    _openKey = '${widget.client.baseUrl}|${widget.sessionId}';
+    _registeredOpenKey = _openKey;
+    reportOpenSession(_openKey);
   }
 
   @override
@@ -81,6 +92,10 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     if (state == AppLifecycleState.resumed && !_closed) {
       _reconnectAttempt = 0;
       _connect();
+      // Backgrounding cleared the suppression key (so notifications fire while
+      // away); restore it — this session is visible again.
+      _registeredOpenKey = _openKey;
+      reportOpenSession(_openKey);
     }
   }
 
@@ -117,22 +132,43 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   void _connect() {
     if (_closed) return;
     _reconnectTimer?.cancel();
+    // Fully detach the old socket first: cancel its subscription so its onDone
+    // can't fire _scheduleReconnect against the NEW channel — that cascade
+    // orphaned healthy sockets and double-applied every delta.
+    _sub?.cancel();
+    _sub = null;
     _channel?.sink.close();
     if (mounted) setState(() => _connError = null);
     final ch = widget.client.attach(widget.sessionId);
     _channel = ch;
-    ch.stream.listen(
+    _sub = ch.stream.listen(
       (msg) {
+        if (!identical(ch, _channel)) return; // stale socket — ignore
         // Any frame means a healthy socket — reset backoff + clear the banner.
         if (_reconnectAttempt != 0 || _connError != null) {
           _reconnectAttempt = 0;
           if (mounted) setState(() => _connError = null);
+        }
+        // Flush sends queued while the socket was down, in order.
+        if (_outbox.isNotEmpty) {
+          for (final p in _outbox) {
+            ch.sink.add(p);
+          }
+          _outbox.clear();
         }
         try {
           final j = jsonDecode(msg as String) as Map<String, dynamic>;
           if (!mounted) return;
           final cur = _state;
           final next = (j['wire'] == 'delta' && cur != null) ? cur.applyDelta(j) : HarnessState.fromJson(j);
+          // Drift check: our event log must line up with the server's count — a
+          // mismatch (dropped/bad frame) resyncs via reconnect, since a fresh
+          // socket's first frame is always a full snapshot.
+          final ec = j['event_count'];
+          if (j['wire'] == 'delta' && ec is int && next.events.length != ec) {
+            _resync(ch);
+            return;
+          }
           final firstLoad = !_didInitialScroll && next.events.isNotEmpty;
           // Auto-follow while pinned to the bottom; the user scrolling up turns it
           // off (and back on when they return) — content growth never does.
@@ -176,18 +212,32 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
               Future.delayed(const Duration(milliseconds: 100), () { if (mounted && _stickToBottom) _toBottom(jump: true); });
             }
           });
-        } catch (_) {}
+        } catch (_) {
+          // A frame we couldn't apply would silently corrupt the transcript —
+          // resync instead of swallowing it.
+          _resync(ch);
+        }
       },
-      onError: (_) => _scheduleReconnect(),
-      onDone: _scheduleReconnect,
+      onError: (_) => _scheduleReconnect(ch),
+      onDone: () => _scheduleReconnect(ch),
       cancelOnError: true,
     );
   }
 
+  // Tear down this socket and rejoin — the fresh connection opens with a full
+  // snapshot, which reconciles any local drift.
+  void _resync(WebSocketChannel ch) {
+    if (!identical(ch, _channel)) return;
+    ch.sink.close();
+    _scheduleReconnect(ch);
+  }
+
   // Reconnect with exponential backoff (1,2,4,8,15,30s). Deduped so onError+onDone
-  // don't double-schedule; reset to 0 on any healthy frame or app-resume.
-  void _scheduleReconnect() {
+  // don't double-schedule; reset to 0 on any healthy frame or app-resume. Only the
+  // CURRENT channel may schedule — a detached socket's late onDone is ignored.
+  void _scheduleReconnect(WebSocketChannel ch) {
     if (_closed) return;
+    if (!identical(ch, _channel)) return; // stale socket
     if (_reconnectTimer?.isActive ?? false) return; // already pending
     _channel = null;
     const steps = [1, 2, 4, 8, 15, 30];
@@ -230,7 +280,16 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     }
   }
 
-  void _send(Map<String, dynamic> m) => _channel?.sink.add(jsonEncode(m));
+  // Send now, or queue for the reconnect flush — never silently drop.
+  void _send(Map<String, dynamic> m) {
+    final payload = jsonEncode(m);
+    final ch = _channel;
+    if (ch == null) {
+      _outbox.add(payload);
+      return;
+    }
+    ch.sink.add(payload);
+  }
 
   void _sendMessage() {
     final t = _input.text.trim();
@@ -397,13 +456,24 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   void dispose() {
     _closed = true;
     _reconnectTimer?.cancel();
+    _sub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
-    reportOpenSession('');
+    // Only clear the suppression key if this screen still owns it — on a session
+    // switch the NEW screen registers before this dispose runs, and clobbering
+    // its key made notifications fire for the session being viewed.
+    if (_registeredOpenKey == _openKey) {
+      _registeredOpenKey = '';
+      reportOpenSession('');
+    }
     // Flush anything still queued so leaving the chat doesn't lose it — the daemon
     // queues it server-side (pending_inputs) and applies it on the next turn. Give
     // the frames a moment to flush before tearing the socket down.
     final ch = _channel;
-    if (_queued.isNotEmpty && ch != null) {
+    if ((_queued.isNotEmpty || _outbox.isNotEmpty) && ch != null) {
+      for (final p in _outbox) {
+        ch.sink.add(p);
+      }
+      _outbox.clear();
       for (final m in _queued) {
         ch.sink.add(jsonEncode({'kind': 'user_message', 'value': m}));
       }
@@ -435,7 +505,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     final events = s?.events ?? const [];
     final items = _transcript(events);
     final scaffold = Scaffold(
-      backgroundColor: widget.embedded ? AppColors.canvas : null,
+      backgroundColor: AppColors.canvas,
       body: SafeArea(
         bottom: false,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -568,7 +638,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       return IconBtn('more-vertical', tooltip: 'Actions', onTap: () => _openActions(s));
     }
     return PopupMenuButton<VoidCallback>(
-      color: AppColors.surface2,
+      color: AppColors.surface1,
       elevation: 8,
       constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
       menuPadding: const EdgeInsets.symmetric(vertical: 4),
@@ -604,7 +674,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       }, value: manual ? 'Ask' : 'Auto'),
       const PopupMenuDivider(),
       item('git-branch', 'Git', () => presentScreen(context, builder: (_, close) => GitScreen(client: widget.client, sessionId: widget.sessionId, onClose: close))),
-      item('folder', 'Open files', () {
+      item('folder', 'Browse', () {
         final name = lastPathSegment(ws, ifEmpty: 'Files');
         presentScreen(context, builder: (_, close) => FileExplorer(client: widget.client, title: name, start: ws.isEmpty ? null : ws, onClose: close));
       }),
@@ -730,7 +800,12 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       child: Row(children: [
         const AppIcon('wifi-off', size: 15, color: AppColors.danger),
         const SizedBox(width: 9),
-        Expanded(child: Text(_connError ?? 'Disconnected', style: sans(12, height: 1.3, color: AppColors.fg1))),
+        Expanded(
+            child: Text(
+                _outbox.isEmpty
+                    ? (_connError ?? 'Disconnected')
+                    : '${_connError ?? 'Disconnected'} · ${_outbox.length} message${_outbox.length == 1 ? '' : 's'} will send on reconnect',
+                style: sans(12, height: 1.3, color: AppColors.fg1))),
         GestureDetector(
           onTap: () {
             _reconnectAttempt = 0;
@@ -1026,6 +1101,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           } catch (e) {
             output = '$e';
           }
+          if (!ctx.mounted) return; // sheet dismissed mid-command
           setSheet(() => busy = false);
         }
 
