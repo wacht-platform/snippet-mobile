@@ -1,0 +1,77 @@
+name: android
+
+# Build the Android APK for free on GitHub's Linux runners and keep a single
+# rolling "latest" pre-release up to date. Every push to main (or a manual run)
+# rebuilds the release APK and replaces the asset on the `apk-latest` release,
+# so there is always a stable public download URL you can open on the phone:
+#
+#   https://github.com/wacht-platform/snippet-native/releases/download/apk-latest/snippet.apk
+#
+# The release build self-signs with the debug key (see android/app/build.gradle.kts),
+# so no keystore/secrets are needed to produce an installable APK.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create/update the rolling release + its tag
+
+# One build at a time; a newer push supersedes an in-flight one.
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Stage the APK under a stable name
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 '^version:' pubspec.yaml | sed -E 's/version: *//')
+          cp build/app/outputs/flutter-apk/app-release.apk snippet.apk
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Update the rolling "latest" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: Latest APK
+          prerelease: true
+          # Move the tag to this commit so the release tracks the newest build.
+          target_commitish: ${{ github.sha }}
+          body: |
+            Rolling development build of the snippet app — always the latest `main`.
+
+            - version: `${{ steps.apk.outputs.version }}`
+            - commit: `${{ steps.apk.outputs.sha }}`
+
+            Install on Android: open **snippet.apk** below on your phone and tap it
+            (allow "install unknown apps" if prompted). This is signed with a debug
+            key, so if a previous build won't update, uninstall it first.
+          files: snippet.apk
