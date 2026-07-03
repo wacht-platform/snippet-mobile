@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -13,7 +14,31 @@ import 'store.dart';
 
 const _fgChannel = 'snippet_fg';
 const _alertChannel = 'snippet_alerts';
+const _downloadChannel = 'snippet_downloads';
 const _prefEnabled = 'notif_enabled';
+
+int _downloadNotifId = 7000;
+
+/// Show a native "download complete" notification; tapping it opens the file.
+Future<void> notifyDownload(String name, String filePath) async {
+  if (!kCanNotify) return;
+  await _mainNotif.show(
+    id: _downloadNotifId++ & 0x7fffffff,
+    title: 'Download complete',
+    body: name,
+    notificationDetails: const NotificationDetails(
+      android: AndroidNotificationDetails(
+        _downloadChannel,
+        'Downloads',
+        channelDescription: 'Files saved from a session',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+      ),
+      macOS: DarwinNotificationDetails(),
+    ),
+    payload: jsonEncode({'type': 'download', 'path': filePath}),
+  );
+}
 
 /// Routed from a tapped notification (set by main with a navigator).
 void Function(Map<String, dynamic> payload)? onNotifTap;
@@ -108,7 +133,14 @@ Future<void> initNotifications() async {
 
 void _route(String payload) {
   try {
-    onNotifTap?.call(jsonDecode(payload) as Map<String, dynamic>);
+    final m = jsonDecode(payload) as Map<String, dynamic>;
+    // A download notification opens the saved file directly, not a session.
+    if (m['type'] == 'download') {
+      final path = m['path'] as String?;
+      if (path != null) OpenFilex.open(path);
+      return;
+    }
+    onNotifTap?.call(m);
   } catch (_) {}
 }
 

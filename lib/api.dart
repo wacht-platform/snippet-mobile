@@ -218,6 +218,11 @@ class DaemonClient {
   }
 
   /// Download a file's raw bytes (any type, up to the daemon's cap).
+  /// Absolute URL (with the auth token) for streaming or displaying a file —
+  /// used by Image.network and the video player. The daemon serves a real
+  /// content-type and honors Range requests, so media streams/seeks.
+  String fileUrl(String path) => _uri('/fs/download', {'path': path}).toString();
+
   Future<Uint8List> downloadFile(String path) async {
     final r = await http.get(_uri('/fs/download', {'path': path}));
     if (r.statusCode != 200) throw _err('download', r);

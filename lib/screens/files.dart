@@ -1,14 +1,19 @@
 import 'dart:io';
 
+import 'package:chewie/chewie.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:media_store_plus/media_store_plus.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:video_player/video_player.dart';
 
 import '../api.dart';
 import '../highlight.dart';
 import '../models.dart';
+import '../notifications.dart';
 import '../panel.dart';
 import '../platform.dart';
 import '../theme.dart';
@@ -328,6 +333,41 @@ class _FileViewerState extends State<FileViewer> {
   bool _downloading = false;
   String? _error;
 
+  static const _imageExts = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'heic', 'heif'};
+  static const _videoExts = {'mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi'};
+  String get _ext {
+    final d = widget.name.lastIndexOf('.');
+    return d >= 0 ? widget.name.substring(d + 1).toLowerCase() : '';
+  }
+  bool get _isImage => _imageExts.contains(_ext);
+  bool get _isVideo => _videoExts.contains(_ext);
+  bool get _isMedia => _isImage || _isVideo;
+
+  // Download-complete sheet (Android): a real modal route, so Open/Share always
+  // receive taps. Picks the action via the sheet's return value, then acts once
+  // it has closed.
+  Future<void> _downloadDoneSheet(String path) async {
+    void shareFile() => Share.shareXFiles([XFile(path, name: widget.name)]);
+    final action = await showAppSheet<String>(context, title: 'Saved to Downloads', child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(widget.name, style: sans(13, height: 1.4, color: AppColors.fg2)),
+        const SizedBox(height: 16),
+        Btn('Open', icon: 'file', full: true, onTap: () => Navigator.pop(context, 'open')),
+        const SizedBox(height: 8),
+        Btn('Share', icon: 'upload', variant: BtnVariant.secondary, full: true, onTap: () => Navigator.pop(context, 'share')),
+        const SizedBox(height: 4),
+      ],
+    ));
+    if (action == 'open') {
+      final r = await OpenFilex.open(path);
+      if (r.type != ResultType.done) shareFile(); // nothing handles it → share
+    } else if (action == 'share') {
+      shareFile();
+    }
+  }
+
   Future<void> _download() async {
     setState(() => _downloading = true);
     try {
@@ -338,13 +378,51 @@ class _FileViewerState extends State<FileViewer> {
       final ext = dot > 0 ? widget.name.substring(dot + 1).toLowerCase() : '';
       String? message;
       if (kMobile) {
-        // Android/iOS: the system document picker doesn't reliably keep the
-        // extension. Write the bytes to a temp file with the real name and hand
-        // it to the share/save sheet, which preserves the filename.
-        final tmp = File('${(await getTemporaryDirectory()).path}/${widget.name}');
-        await tmp.writeAsBytes(bytes);
-        final res = await Share.shareXFiles([XFile(tmp.path, name: widget.name)]);
-        message = res.status == ShareResultStatus.success ? 'Saved ${widget.name}' : null;
+        // A persistent copy backs Open / Share and the tappable notification.
+        // It MUST live outside the temp/cache dir: on Android getTemporaryDirectory
+        // and the cache dir are the same folder, and MediaStore deletes its temp
+        // after saving — which was silently deleting this file too. The support
+        // (files) dir is distinct and covered by the share/open FileProviders.
+        final openFile = File('${(await getApplicationSupportDirectory()).path}/${widget.name}');
+        await openFile.writeAsBytes(bytes);
+        Future<String?> shareIt() async {
+          final res = await Share.shareXFiles([XFile(openFile.path, name: widget.name)]);
+          return res.status == ShareResultStatus.success ? 'Saved ${widget.name}' : null;
+        }
+        if (Platform.isAndroid) {
+          // Android: save straight into the public Downloads folder via MediaStore
+          // — no share sheet. Falls back to the share sheet if that ever fails.
+          var saved = false;
+          try {
+            final storeTemp = File('${(await getTemporaryDirectory()).path}/${widget.name}');
+            await storeTemp.writeAsBytes(bytes);
+            await MediaStore.ensureInitialized();
+            MediaStore.appFolder = 'Snippet';
+            final info = await MediaStore().saveFile(
+              tempFilePath: storeTemp.path,
+              dirType: DirType.download,
+              dirName: DirName.download,
+              relativePath: FilePath.root, // Downloads root, not a subfolder
+            );
+            saved = info != null;
+          } catch (_) {
+            saved = false;
+          }
+          if (saved) {
+            // Native notification (tap → open) + an in-app sheet with Open/Share.
+            // A sheet (a real modal route) is used rather than an overlay toast:
+            // the file viewer is itself a modal, and overlay toasts layered over a
+            // modal barrier don't reliably receive taps.
+            notifyDownload(widget.name, openFile.path);
+            if (mounted) _downloadDoneSheet(openFile.path);
+            message = null; // the sheet replaces the plain toast
+          } else {
+            message = await shareIt();
+          }
+        } else {
+          // iOS: the share sheet ("Save to Files") is the idiomatic save path.
+          message = await shareIt();
+        }
       } else {
         // Desktop: the save panel returns a path (no write); write the bytes
         // ourselves and re-append the extension if the panel dropped it.
@@ -368,7 +446,12 @@ class _FileViewerState extends State<FileViewer> {
   @override
   void initState() {
     super.initState();
-    _load();
+    // Media renders straight from its streaming URL — no text read.
+    if (_isMedia) {
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   @override
@@ -408,13 +491,37 @@ class _FileViewerState extends State<FileViewer> {
         child: Column(children: [
           SnAppBar(title: widget.name, subtitle: widget.path, onBack: widget.onClose ?? () => Navigator.pop(context), actions: [
             IconBtn('download', tooltip: 'Download', onTap: _downloading ? null : _download),
-            IconBtn('edit', tooltip: 'Edit', onTap: () => presentScreen(context,
-              style: PanelStyle.dialog,
-              dismissible: false,
-              builder: (_, close) => EditorScreen(client: widget.client, path: widget.path, name: widget.name, onClose: close),
-            ).then((_) => _load())),
+            // Editing is text-only.
+            if (!_isMedia)
+              IconBtn('edit', tooltip: 'Edit', onTap: () => presentScreen(context,
+                style: PanelStyle.dialog,
+                dismissible: false,
+                builder: (_, close) => EditorScreen(client: widget.client, path: widget.path, name: widget.name, onClose: close),
+              ).then((_) => _load())),
           ]),
-          if (_loading)
+          if (_isImage)
+            Expanded(
+              child: ColoredBox(
+                color: Colors.black,
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 6,
+                  child: Center(
+                    child: Image.network(
+                      widget.client.fileUrl(widget.path),
+                      fit: BoxFit.contain,
+                      loadingBuilder: (ctx, child, prog) => prog == null
+                          ? child
+                          : const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))),
+                      errorBuilder: (ctx, e, st) => EmptyState(icon: 'alert-triangle', title: "Can't load image", body: '$e'),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else if (_isVideo)
+            Expanded(child: _VideoView(url: widget.client.fileUrl(widget.path)))
+          else if (_loading)
             const Expanded(child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))))
           else if (_error != null)
             Expanded(child: EmptyState(icon: 'alert-triangle', title: 'Failed to load', body: _error!))
@@ -446,5 +553,94 @@ class _FileViewerState extends State<FileViewer> {
         ]),
       ),
     );
+  }
+}
+
+/// Streaming video player (chewie over video_player). Points at the daemon's
+/// /fs/download URL, which serves a video content-type and Range requests — so
+/// playback streams and seeks instead of downloading the whole file first.
+class _VideoView extends StatefulWidget {
+  final String url;
+  const _VideoView({required this.url});
+  @override
+  State<_VideoView> createState() => _VideoViewState();
+}
+
+class _VideoViewState extends State<_VideoView> {
+  VideoPlayerController? _vc;
+  ChewieController? _chewie;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      final vc = VideoPlayerController.networkUrl(
+        Uri.parse(widget.url),
+        // Mix with other audio rather than demanding exclusive audio focus — so
+        // playback isn't silently blocked when something else holds focus (e.g.
+        // an active phone call).
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
+      // Surface a runtime playback error (decode/source failure) instead of a
+      // dead play button — video_player reports these on the value, not as a throw.
+      vc.addListener(_onValue);
+      await vc.initialize();
+      if (!mounted) {
+        vc.dispose();
+        return;
+      }
+      setState(() {
+        _vc = vc;
+        _chewie = ChewieController(
+          videoPlayerController: vc,
+          autoPlay: true, // a tapped video should just start
+          looping: false,
+          allowFullScreen: true,
+          aspectRatio: vc.value.aspectRatio == 0 ? 16 / 9 : vc.value.aspectRatio,
+          errorBuilder: (ctx, msg) => EmptyState(icon: 'alert-triangle', title: "Can't play video", body: msg),
+          materialProgressColors: ChewieProgressColors(
+            playedColor: AppColors.accent,
+            handleColor: AppColors.accent,
+            bufferedColor: AppColors.surface3,
+            backgroundColor: AppColors.surface2,
+          ),
+        );
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
+  }
+
+  void _onValue() {
+    final vc = _vc;
+    if (vc != null && vc.value.hasError && _error == null && mounted) {
+      setState(() => _error = vc.value.errorDescription ?? 'playback error');
+    }
+  }
+
+  @override
+  void dispose() {
+    _vc?.removeListener(_onValue);
+    _chewie?.dispose();
+    _vc?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return EmptyState(icon: 'alert-triangle', title: "Can't play video", body: _error!);
+    }
+    final ch = _chewie;
+    if (ch == null) {
+      return const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3)));
+    }
+    // Chewie sizes the video from its own aspectRatio; letterbox on black.
+    return ColoredBox(color: Colors.black, child: Chewie(controller: ch));
   }
 }
