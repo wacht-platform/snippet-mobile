@@ -383,17 +383,22 @@ class _DesktopShellState extends State<DesktopShell> {
   Widget _recentPlaceholder() {
     final sessions = (_sessions ?? const <SessionInfo>[]).take(8).toList();
     return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: ConstrainedBox(
+        // Clamp the block so recent sessions stay a bounded, centered preview
+        // with breathing room top/bottom instead of filling a small viewport;
+        // the list scrolls within when there are more than fit.
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 520),
         child: ListView(
           shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+          padding: const EdgeInsets.symmetric(vertical: 24),
           children: [
             Text('Recent sessions', style: display(24)),
             const SizedBox(height: 6),
             Text('Pick up where you left off, or start a new chat from Browse.',
                 style: sans(12.5, height: 1.4, color: AppColors.fg3)),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             if (_sessionsLoading && _sessions == null)
               const Center(
                   child: Padding(
@@ -410,10 +415,10 @@ class _DesktopShellState extends State<DesktopShell> {
                       style: sans(12.5, color: AppColors.fg4)))
             else
               ...sessions.map((s) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.only(bottom: 8),
                     child: AppCard(
                       onTap: () => _openSession(s.id, s.title, s.profile),
-                      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+                      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
                       child: Row(children: [
                         Expanded(
                           child: Column(
@@ -422,8 +427,8 @@ class _DesktopShellState extends State<DesktopShell> {
                                 Text(s.title.isEmpty ? '(untitled)' : s.title,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: sans(13, color: AppColors.fg1)),
-                                const SizedBox(height: 2),
+                                    style: sans(13.5, color: AppColors.fg1)),
+                                const SizedBox(height: 3),
                                 Text(
                                     lastPathSegment(s.folder,
                                         ifEmpty: s.folder),
@@ -440,6 +445,7 @@ class _DesktopShellState extends State<DesktopShell> {
                   )),
           ],
         ),
+        ),
       ),
     );
   }
@@ -452,22 +458,28 @@ class _DesktopShellState extends State<DesktopShell> {
       Positioned(
           top: 6,
           left: 6,
-          child: IconBtn('sidebar', tooltip: 'Sidebar', onTap: onMenu)),
+          child: IconBtn('sidebar',
+              size: kMobile ? 44 : 38,
+              iconSize: kMobile ? 25 : 19,
+              tooltip: 'Sidebar',
+              onTap: onMenu)),
     ]);
   }
 
   Widget _welcome() {
     return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 380),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
         child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
                 child: Container(
-                  width: 52,
-                  height: 52,
+                  width: 54,
+                  height: 54,
                   decoration: BoxDecoration(
                       color: AppColors.surface2,
                       borderRadius: BorderRadius.circular(R.card),
@@ -475,11 +487,11 @@ class _DesktopShellState extends State<DesktopShell> {
                   child: const AppIcon('cpu', size: 24, color: AppColors.fg3),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               Text('No instance connected',
                   textAlign: TextAlign.center,
-                  style: sans(15, color: AppColors.fg1)),
-              const SizedBox(height: 6),
+                  style: sans(15.5, color: AppColors.fg1)),
+              const SizedBox(height: 8),
               Text.rich(
                 TextSpan(
                     style: sans(12.5, height: 1.5, color: AppColors.fg3),
@@ -494,11 +506,12 @@ class _DesktopShellState extends State<DesktopShell> {
                     ]),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 22),
               Center(
                   child: PillBtn('Add machine',
                       icon: 'plus', onTap: _addInstanceFlow)),
             ]),
+        ),
       ),
     );
   }

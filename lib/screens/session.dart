@@ -652,7 +652,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       ),
       child: Row(children: [
         // Back to the session list (the drawer is the mobile "menu").
-        IconBtn('chevron-left', iconSize: 24, tooltip: 'Sessions', onTap: widget.onMenu),
+        IconBtn('chevron-left', size: 42, iconSize: 28, tooltip: 'Sessions', onTap: widget.onMenu),
         // Tapping the title area itself opens the session actions (rename, model,
         // files, git, …) — no separate ellipsis button needed.
         Expanded(

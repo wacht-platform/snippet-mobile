@@ -830,7 +830,7 @@ class SnAppBar extends StatelessWidget {
         border: const Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(children: [
-        if (leading != null) leading! else if (onBack != null) IconBtn('chevron-left', iconSize: 22, onTap: onBack) else const SizedBox(width: 8),
+        if (leading != null) leading! else if (onBack != null) IconBtn('chevron-left', size: kMobile ? 42 : 38, iconSize: kMobile ? 27 : 22, onTap: onBack) else const SizedBox(width: 8),
         const SizedBox(width: 4),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
