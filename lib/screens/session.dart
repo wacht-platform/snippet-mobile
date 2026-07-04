@@ -951,14 +951,67 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     );
   }
 
+  // A single compact pill ("📎 2 attachments") instead of a row of chips. Tap to
+  // review/remove individual items; the trailing ✕ clears them all.
   Widget _attachmentBar() {
+    final n = _attachments.length;
+    final uploading = _anyUploading;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8, left: 2, right: 2),
-      child: Wrap(spacing: 8, runSpacing: 8, children: _attachments.map(_attachmentChip).toList()),
+      padding: const EdgeInsets.only(bottom: 8, left: 2),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Material(
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(R.card),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(R.card),
+            onTap: _reviewAttachments,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(11, 7, 7, 7),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (uploading)
+                  const SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))
+                else
+                  const Text('📎', style: TextStyle(fontSize: 13)),
+                const SizedBox(width: 7),
+                Text(uploading ? 'Uploading $n…' : '$n attachment${n == 1 ? '' : 's'}',
+                    style: sans(12.5, color: AppColors.fg2)),
+                const SizedBox(width: 6),
+                InkWell(
+                  borderRadius: BorderRadius.circular(R.sm),
+                  onTap: () => setState(() => _attachments.clear()),
+                  child: const Padding(padding: EdgeInsets.all(4), child: AppIcon('x', size: 15, color: AppColors.fg4)),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _attachmentChip(_Attachment a) {
+  // Tap the pill → a sheet listing each attachment, each removable.
+  void _reviewAttachments() {
+    if (_attachments.isEmpty) return;
+    showAppSheet<void>(context, title: 'Attachments', child: StatefulBuilder(
+      builder: (ctx, setSheet) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: _attachments
+            .map((a) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _attachmentChip(a, onRemove: () {
+                    setState(() => _attachments.remove(a));
+                    setSheet(() {});
+                    if (_attachments.isEmpty) Navigator.pop(ctx);
+                  }),
+                ))
+            .toList(),
+      ),
+    ));
+  }
+
+  Widget _attachmentChip(_Attachment a, {VoidCallback? onRemove}) {
     return Container(
       padding: EdgeInsets.fromLTRB(a.isImage && a.localPath != null ? 4 : 9, 4, 4, 4),
       decoration: BoxDecoration(
@@ -972,15 +1025,14 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         else
           AppIcon(a.isImage ? 'image' : 'file', size: 15, color: AppColors.fg3),
         const SizedBox(width: 7),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 130),
+        Expanded(
           child: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(11.5, color: AppColors.fg2)),
         ),
         const SizedBox(width: 4),
         if (a.uploading)
           const Padding(padding: EdgeInsets.all(6), child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3)))
         else
-          IconBtn('x', size: 24, iconSize: 13, onTap: () => setState(() => _attachments.remove(a))),
+          IconBtn('x', size: 24, iconSize: 13, onTap: onRemove ?? () => setState(() => _attachments.remove(a))),
       ]),
     );
   }
