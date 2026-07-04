@@ -92,6 +92,10 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     if (state == AppLifecycleState.resumed && !_closed) {
       _reconnectAttempt = 0;
       _connect();
+      // Re-sync the model label from the daemon on resume: it may have changed
+      // while backgrounded (from the TUI or another device), and this also
+      // repaints the correct per-session model if the OS rebuilt the view.
+      _loadModel();
       // Backgrounding cleared the suppression key (so notifications fire while
       // away); restore it — this session is visible again.
       _registeredOpenKey = _openKey;
@@ -102,7 +106,35 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   Future<void> _loadModel() async {
     try {
       final cfg = await widget.client.getConfig();
-      final wanted = _currentProfile ?? widget.profile;
+
+      // Resolve which profile this session is on, most authoritative first:
+      //   1. an in-session pick the user just made (optimistic, same screen);
+      //   2. the daemon's live per-session override — the source of truth; it's
+      //      persisted server-side and survives remount/resume/daemon restart;
+      //   3. only if the daemon is unreachable, the value the session list
+      //      handed us (which goes stale after a switch — that staleness is
+      //      exactly what used to snap the header back to the global default).
+      // A session with no override resolves to null → the global active profile
+      // below. Reading the server, not the list cache, is what keeps a
+      // per-chat model sticky when you leave and come back to the window.
+      String? wanted = _currentProfile;
+      if (wanted == null) {
+        try {
+          final list = await widget.client.sessions();
+          var found = false;
+          for (final s in list) {
+            if (s.id == widget.sessionId) {
+              wanted = s.profile; // null here means "uses the global default"
+              found = true;
+              break;
+            }
+          }
+          if (!found) wanted = widget.profile;
+        } catch (_) {
+          wanted = widget.profile;
+        }
+      }
+
       ModelProfile? p;
       if (wanted != null) {
         for (final m in cfg.profiles) {
