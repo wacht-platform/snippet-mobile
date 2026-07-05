@@ -270,6 +270,25 @@ String rateWindowLabel(int minutes) {
   return 'limit';
 }
 
+/// "resets in 2h 14m · 15:45" from a Unix-epoch-seconds reset time (null if
+/// unknown or already elapsed). Durations normalize up — minutes → hours → days
+/// (so a weekly window reads "6d 6h", not "150h 54m"). The local clock time is
+/// appended only for near resets (< 1 day out), where it's actually useful.
+String? rateResetLabel(int resetsAt) {
+  if (resetsAt <= 0) return null;
+  final reset = DateTime.fromMillisecondsSinceEpoch(resetsAt * 1000);
+  final d = reset.difference(DateTime.now());
+  if (d.isNegative) return 'resetting…';
+  final days = d.inDays, h = d.inHours % 24, m = d.inMinutes % 60;
+  if (days > 0) return 'resets in ${h > 0 ? '${days}d ${h}h' : '${days}d'}';
+  final rel = d.inHours > 0
+      ? 'resets in ${m > 0 ? '${d.inHours}h ${m}m' : '${d.inHours}h'}'
+      : 'resets in ${m}m';
+  final hh = reset.hour.toString().padLeft(2, '0');
+  final mm = reset.minute.toString().padLeft(2, '0');
+  return '$rel · $hh:$mm';
+}
+
 /// Compact SI token formatting (mirrors the TUI's fmt_si: 91M / 425k / 512).
 String fmtSi(int v) {
   if (v >= 1000000) {

@@ -1296,6 +1296,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
               child: Builder(builder: (_) {
                 final rem = w.leftPercent;
                 final color = rem < 20 ? AppColors.danger : rem < 50 ? AppColors.run : AppColors.ok;
+                final reset = rateResetLabel(w.resetsAt);
                 return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     Text(rateWindowLabel(w.windowMinutes), style: sans(12, color: AppColors.fg2)),
@@ -1303,6 +1304,10 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
                   ]),
                   const SizedBox(height: 6),
                   Progress(pct: rem, color: color, height: 6),
+                  if (reset != null) ...[
+                    const SizedBox(height: 5),
+                    Text(reset, style: mono(10.5, color: AppColors.fg4)),
+                  ],
                 ]);
               }),
             ),
