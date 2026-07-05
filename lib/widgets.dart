@@ -553,13 +553,15 @@ String hideAttachmentMarkers(String raw) {
   final matches = _attachMarkerRe.allMatches(raw).toList();
   if (matches.isEmpty) return raw;
   final stripped = raw.replaceAll(_attachMarkerRe, '').trim();
-  if (stripped.isNotEmpty) return stripped;
   final images = matches.where((m) => m.group(1) == 'image').length;
   final files = matches.length - images;
   final parts = <String>[];
   if (images > 0) parts.add('$images image${images == 1 ? '' : 's'}');
   if (files > 0) parts.add('$files file${files == 1 ? '' : 's'}');
-  return '📎 ${parts.join(' · ')}';
+  final summary = '📎 ${parts.join(' · ')}';
+  // Keep the attachment visible even when the message also has text — otherwise a
+  // sent message shows only its text and the fact it carried attachments vanishes.
+  return stripped.isEmpty ? summary : '$stripped\n\n$summary';
 }
 
 /// One chat message — flat (no bubble/box). YOUR messages get a left accent bar
