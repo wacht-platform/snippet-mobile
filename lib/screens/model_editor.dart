@@ -156,12 +156,12 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
                 Text('Reasoning effort', style: sans(12, weight: FontWeight.w500, color: AppColors.fg2)),
                 const SizedBox(height: 7),
                 Pills<String>(
-                  items: const [('', 'Default'), ('off', 'Off'), ('low', 'Low'), ('medium', 'Medium'), ('high', 'High')],
+                  items: const [('', 'Default'), ('off', 'Off'), ('low', 'Low'), ('medium', 'Medium'), ('high', 'High'), ('xhigh', 'X-High')],
                   selected: _effort,
                   onSelect: (val) => setState(() => _effort = val),
                 ),
                 const SizedBox(height: 6),
-                Text("Higher means more thinking — better on hard problems, more tokens. Default uses the provider's own; Off disables reasoning. Applies to reasoning models (OpenAI/Codex, Gemini, Anthropic).",
+                Text("Higher means more thinking — better on hard problems, more tokens. Default uses the provider's own; Off disables reasoning. X-High is the top tier (e.g. gpt-5.1-codex-max) and falls back to the model's max where unsupported. Applies to reasoning models (OpenAI/Codex, Gemini, Anthropic).",
                     style: sans(11.5, height: 1.4, color: AppColors.fg4)),
                 const SizedBox(height: 16),
                 if (_isChatgpt)

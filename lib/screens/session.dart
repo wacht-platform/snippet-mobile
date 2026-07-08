@@ -50,7 +50,6 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   String? _connError;
   String? _modelLabel;
   String? _currentProfile;
-  bool _isCodex = false;
   final _input = TextEditingController();
   final _scroll = ScrollController();
   // Messages sent mid-run, shown optimistically until the daemon applies them as
@@ -59,6 +58,12 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   // Messages sent to the daemon but not yet echoed back as events — shown
   // optimistically (faint) so they don't vanish during the round-trip.
   final List<String> _pending = [];
+
+  // How many user turns (typed or steered) the daemon has echoed into the event
+  // log — the FIFO baseline for retiring optimistic bubbles (see the socket
+  // handler; count-based, not text-based, so daemon-side trimming can't strand one).
+  static int _userEchoCount(List<Map<String, dynamic>> events) =>
+      events.where((e) => e['kind'] == 'user_input' || e['kind'] == 'steer').length;
   // Pending attachments (images + files, up to 10): each uploads to the daemon
   // and is referenced in the next message. Images → read_image, files → read.
   final List<_Attachment> _attachments = [];
@@ -88,14 +93,19 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // The OS often drops the socket while backgrounded — reconnect promptly on resume.
+    // Reconnect on resume ONLY if the socket actually died while backgrounded
+    // (_scheduleReconnect nulls _channel). Unconditionally reconnecting tore
+    // down a healthy socket and forced a full-snapshot reload + scroll jump
+    // after even a momentary backgrounding. If the OS silently killed the
+    // socket without an event, the next write fails → onError → reconnect.
     if (state == AppLifecycleState.resumed && !_closed) {
-      _reconnectAttempt = 0;
-      _connect();
-      // Re-sync the model label from the daemon on resume: it may have changed
-      // while backgrounded (from the TUI or another device), and this also
-      // repaints the correct per-session model if the OS rebuilt the view.
-      _loadModel();
+      if (_channel == null) {
+        _reconnectAttempt = 0;
+        _connect();
+        // Re-sync the model label from the daemon after a real reconnect: it may
+        // have changed while backgrounded (from the TUI or another device).
+        _loadModel();
+      }
       // Backgrounding cleared the suppression key (so notifications fire while
       // away); restore it — this session is visible again.
       _registeredOpenKey = _openKey;
@@ -155,7 +165,6 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       if (mounted) {
         setState(() {
           _modelLabel = p?.name;
-          _isCodex = p?.provider == 'chatgpt';
         });
       }
     } catch (_) {}
@@ -205,9 +214,10 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           // Auto-follow while pinned to the bottom; the user scrolling up turns it
           // off (and back on when they return) — content growth never does.
           final follow = _stickToBottom;
-          // The moment the run pauses (running → not running), auto-submit anything
-          // the user queued while it was busy.
-          if (_prevStatus == 'running' && next.status != 'running' && _queued.isNotEmpty) {
+          // Auto-submit queued messages only when the run lands on IDLE. Flushing
+          // on any running→non-running edge also fired into waiting_for_input,
+          // where the queued text would "answer" the agent's own question.
+          if (_prevStatus == 'running' && next.status == 'idle' && _queued.isNotEmpty) {
             for (final m in _queued) {
               _send({'kind': 'user_message', 'value': m});
               _pending.add(m);
@@ -215,16 +225,21 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             _queued.clear();
           }
           _prevStatus = next.status;
-          // Drop pending bubbles once the daemon echoes them back as events.
-          if (j['wire'] == 'delta') {
-            for (final e in ((j['new_events'] as List?) ?? const [])) {
-              final m = e as Map;
-              if (m['kind'] == 'user_input' || m['kind'] == 'steer') {
-                _pending.remove(m['text']?.toString());
-              }
+          // Retire optimistic bubbles as the daemon echoes user turns back —
+          // FIFO by COUNT of user_input/steer events, not by exact text (the
+          // daemon trims/normalizes, so text equality left stuck/dup bubbles).
+          // On a full snapshot, reconcile against the previous event log rather
+          // than blanket-clearing: a clear here erased just-sent messages that
+          // were flushed from the outbox but not yet echoed (they "vanished").
+          final prevEchoes = cur == null ? null : _userEchoCount(cur.events);
+          final nextEchoes = _userEchoCount(next.events);
+          if (prevEchoes != null) {
+            var retired = (nextEchoes - prevEchoes).clamp(0, _pending.length);
+            while (retired-- > 0) {
+              _pending.removeAt(0);
             }
-          } else {
-            _pending.clear(); // full snapshot is authoritative
+          } else if (j['wire'] != 'delta') {
+            _pending.clear(); // first-ever snapshot: nothing optimistic predates it
           }
           setState(() {
             _state = next;
@@ -294,11 +309,15 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
   // Update the stick flag from a user-driven scroll (drag or settle).
   bool _onScroll(ScrollNotification n) {
+    final was = _stickToBottom;
     if (n is ScrollUpdateNotification && n.dragDetails != null) {
       _stickToBottom = _atBottom();
     } else if (n is ScrollEndNotification) {
       _stickToBottom = _atBottom();
     }
+    // Repaint only on the pinned/unpinned EDGE — it toggles the floating
+    // "jump to latest" button over the transcript.
+    if (was != _stickToBottom && mounted) setState(() {});
     return false;
   }
 
@@ -324,6 +343,10 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   }
 
   void _sendMessage() {
+    // An upload still in flight would be silently DROPPED (only remotePath'd
+    // attachments ship, then the list is cleared). The send button disables via
+    // canSend, but keyboard submit bypassed it — guard here, the single choke point.
+    if (_anyUploading) return;
     final t = _input.text.trim();
     final ready = _attachments.where((a) => a.remotePath != null).toList();
     if (t.isEmpty && ready.isEmpty) return;
@@ -550,7 +573,8 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           if (!kMobile) _statusStrip(s, running),
           if (_connError != null) _disconnectedBanner(),
           Expanded(
-            child: _centerWide(s == null
+            child: Stack(children: [
+              _centerWide(s == null
                 ? const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3)))
                 : NotificationListener<ScrollNotification>(
                     onNotification: _onScroll,
@@ -569,12 +593,48 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
                         const SizedBox(height: 12),
                         for (final q in _queued) _QueuedBubble(text: _queuedLabel(q), onCancel: _cancelQueued),
                       ],
-                      if (waiting && _pendingApproval(events)) ...[const SizedBox(height: 12), _ApprovalBar(onSend: _send)]
-                      else if (waiting && s.pendingQuestion != null) ...[const SizedBox(height: 12), _QuestionBar(question: s.pendingQuestion!, onSend: _send)],
                     ],
                   ),
                 )),
+              // Floating "jump to latest": scrolling up unpins auto-follow, and a
+              // streaming reply then grows silently — give a one-tap way back.
+              if (!_stickToBottom && s != null)
+                Positioned(
+                  right: 16,
+                  bottom: 12,
+                  child: Material(
+                    color: AppColors.surface2,
+                    shape: const CircleBorder(side: BorderSide(color: AppColors.border)),
+                    elevation: 3,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () {
+                        _stickToBottom = true;
+                        setState(() {});
+                        _toBottom(jump: true);
+                      },
+                      child: const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: AppIcon('chevron-down', size: 18, color: AppColors.fg2),
+                      ),
+                    ),
+                  ),
+                ),
+            ]),
           ),
+          // The question/approval bars are PINNED here (not inside the scroll
+          // list) so a "needs input" request is always visible — buried at the
+          // bottom of a scrolled-up transcript it read as "the agent is stuck".
+          if (waiting && _pendingApproval(events))
+            _centerWide(Padding(
+              padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+              child: _ApprovalBar(onSend: _send),
+            ))
+          else if (waiting && s?.pendingQuestion != null)
+            _centerWide(Padding(
+              padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+              child: _QuestionBar(question: s!.pendingQuestion!, onSend: _send),
+            )),
           _centerWide(_inputBar(running)),
         ]),
       ),
@@ -636,7 +696,10 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   // facts (status · model · context · approval) — so there's no separate,
   // cramped desktop toolbar + scrolling chip strip on a phone.
   Widget _mobileHeader(HarnessState? s, bool running, bool waiting) {
-    final statusWord = waiting ? 'Needs input' : (running ? 'Running' : 'Idle');
+    final compacting = s?.compacting ?? false;
+    final statusWord = compacting
+        ? 'Compacting history…'
+        : (waiting ? 'Needs input' : (running ? 'Running' : 'Idle'));
     final facts = <String>[
       statusWord,
       if (s?.goal?.ongoing ?? false) (s!.goal!.paused ? '◇ goal paused' : '◇ goal'),
@@ -876,8 +939,9 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       }
       if (s.totalTokens > 0) chips.add(_StatMeta(icon: 'zap', label: '${fmtSi(s.totalTokens)} tok'));
       chips.add(_StatMeta(icon: 'shield', label: s.approvalMode == 'auto' ? 'Auto-approve' : 'Ask', tone: s.approvalMode == 'auto' ? 'accent' : 'default'));
+      // Show for ANY provider that reported limits, not just ChatGPT/Codex.
       final rp = s.ratePrimary;
-      if (_isCodex && rp != null) chips.add(_StatMeta(icon: 'clipboard', label: '${rateWindowLabel(rp.windowMinutes)} · ${rp.leftPercent.round()}%', tone: 'run'));
+      if (rp != null) chips.add(_StatMeta(icon: 'clipboard', label: '${rateWindowLabel(rp.windowMinutes)} · ${rp.leftPercent.round()}%', tone: 'run'));
     }
     return Container(
       height: 44,
@@ -920,9 +984,13 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     );
   }
 
+  // Live send-enabled check — read at tap/submit time and inside the
+  // ValueListenableBuilder below, so typing never has to setState the screen.
+  bool get _canSend =>
+      (_input.text.trim().isNotEmpty || _attachments.any((a) => a.remotePath != null)) &&
+      !_anyUploading;
+
   Widget _inputBar(bool running) {
-    final hasText = _input.text.trim().isNotEmpty;
-    final canSend = (hasText || _attachments.any((a) => a.remotePath != null)) && !_anyUploading;
     return Container(
       padding: EdgeInsets.fromLTRB(12, 4, 12, 8 + MediaQuery.of(context).padding.bottom),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -941,15 +1009,17 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             // Cmd/Ctrl+Enter sends (handy on desktop where Enter inserts a newline).
             CallbackShortcuts(
               bindings: {
-                const SingleActivator(LogicalKeyboardKey.enter, meta: true): () { if (canSend) _sendMessage(); },
-                const SingleActivator(LogicalKeyboardKey.enter, control: true): () { if (canSend) _sendMessage(); },
+                const SingleActivator(LogicalKeyboardKey.enter, meta: true): () { if (_canSend) _sendMessage(); },
+                const SingleActivator(LogicalKeyboardKey.enter, control: true): () { if (_canSend) _sendMessage(); },
               },
               child: TextField(
                 controller: _input,
                 minLines: 1,
                 maxLines: 8,
                 cursorColor: AppColors.accent,
-                onChanged: (_) => setState(() {}),
+                // No onChanged setState: rebuilding the WHOLE screen (incl. the
+                // transcript) per keystroke caused typing lag in long sessions.
+                // The send button listens to the controller directly below.
                 onSubmitted: (_) => _sendMessage(),
                 style: sans(15, height: 1.45, color: AppColors.fg1),
                 decoration: InputDecoration(
@@ -968,7 +1038,12 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
               const Spacer(),
               IconBtn('plus', size: 36, iconSize: 21, tooltip: 'Attach', onTap: _onAttachTap),
               const SizedBox(width: 2),
-              _SendBtn(enabled: canSend, onTap: canSend ? _sendMessage : null),
+              // Only the send button re-renders as text changes.
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _input,
+                builder: (_, __, ___) =>
+                    _SendBtn(enabled: _canSend, onTap: _canSend ? _sendMessage : null),
+              ),
             ]),
           ]),
         ),
@@ -1279,7 +1354,8 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           ],
         ]);
       },
-    ));
+      // Free the controller when the sheet closes (it leaked one per open).
+    )).whenComplete(ctrl.dispose);
   }
 
   void _showUsage() {
@@ -1310,7 +1386,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         const SizedBox(width: 8),
         Expanded(child: StatTile(label: 'Total', value: fmtSi(s.totalTokens), accent: true)),
       ]),
-      if (_isCodex && (s.ratePrimary != null || s.rateSecondary != null)) ...[
+      if (s.ratePrimary != null || s.rateSecondary != null) ...[
         const SizedBox(height: 18),
         const SectionLabel('Rate limits · remaining'),
         const SizedBox(height: 8),
@@ -1532,9 +1608,24 @@ class _QueuedBubble extends StatelessWidget {
   }
 }
 
-class _ApprovalBar extends StatelessWidget {
+class _ApprovalBar extends StatefulWidget {
   final void Function(Map<String, dynamic>) onSend;
   const _ApprovalBar({required this.onSend});
+  @override
+  State<_ApprovalBar> createState() => _ApprovalBarState();
+}
+
+class _ApprovalBarState extends State<_ApprovalBar> {
+  // Disable after the first tap — the bar stays on screen until the next frame
+  // flips status, so an impatient double-tap fired the decision twice.
+  bool _sent = false;
+
+  void _decide(Map<String, dynamic> m) {
+    if (_sent) return;
+    setState(() => _sent = true);
+    widget.onSend(m);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1544,16 +1635,19 @@ class _ApprovalBar extends StatelessWidget {
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Padding(padding: EdgeInsets.only(top: 1), child: AppIcon('shield', size: 16, color: AppColors.accent)),
           const SizedBox(width: 9),
-          Expanded(child: Text('Approve this action?', style: sans(13, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1))),
+          Expanded(child: Text(_sent ? 'Sending…' : 'Approve this action?', style: sans(13, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1))),
         ]),
         const SizedBox(height: 11),
-        Row(children: [
-          Expanded(child: Btn('Approve', small: true, icon: 'check', onTap: () => onSend({'kind': 'approve'}))),
-          const SizedBox(width: 8),
-          Expanded(child: Btn('Approve all', small: true, variant: BtnVariant.secondary, icon: 'check-check', onTap: () => onSend({'kind': 'approve_all'}))),
-          const SizedBox(width: 8),
-          Btn('Deny', small: true, variant: BtnVariant.ghost, onTap: () => onSend({'kind': 'deny'})),
-        ]),
+        Opacity(
+          opacity: _sent ? 0.5 : 1,
+          child: Row(children: [
+            Expanded(child: Btn('Approve', small: true, icon: 'check', onTap: _sent ? null : () => _decide({'kind': 'approve'}))),
+            const SizedBox(width: 8),
+            Expanded(child: Btn('Approve all', small: true, variant: BtnVariant.secondary, icon: 'check-check', onTap: _sent ? null : () => _decide({'kind': 'approve_all'}))),
+            const SizedBox(width: 8),
+            Btn('Deny', small: true, variant: BtnVariant.ghost, onTap: _sent ? null : () => _decide({'kind': 'deny'})),
+          ]),
+        ),
       ]),
     );
   }
@@ -1609,6 +1703,9 @@ class _QuestionBar extends StatefulWidget {
 class _QuestionBarState extends State<_QuestionBar> {
   final Map<String, TextEditingController> _text = {};
   final Map<String, String> _choice = {};
+  // One answer per ask — the bar lingers until the next frame flips status,
+  // so an eager second tap double-submitted the answer.
+  bool _sent = false;
 
   List<Map<String, dynamic>> get _questions =>
       ((widget.question['questions'] as List?) ?? const []).cast<Map<String, dynamic>>();
@@ -1632,7 +1729,8 @@ class _QuestionBarState extends State<_QuestionBar> {
       });
 
   void _submit() {
-    if (!_ready) return;
+    if (!_ready || _sent) return;
+    setState(() => _sent = true);
     final multi = _questions.length > 1;
     final parts = _questions.map((q) {
       final id = q['id'].toString();
@@ -1751,7 +1849,7 @@ class _QuestionBarState extends State<_QuestionBar> {
           ..._inputFor(q),
         ],
         const SizedBox(height: 16),
-        Btn('Send answer', small: true, icon: 'send', full: true, disabled: !_ready, onTap: _ready ? _submit : null),
+        Btn(_sent ? 'Sending…' : 'Send answer', small: true, icon: 'send', full: true, disabled: !_ready || _sent, onTap: (_ready && !_sent) ? _submit : null),
       ]),
     );
   }

@@ -39,6 +39,9 @@ class _DesktopShellState extends State<DesktopShell> {
   // and is shared with the "recent sessions" placeholder.
   List<SessionInfo>? _sessions;
   bool _sessionsLoading = false;
+  // Non-null when the last session fetch failed — rendered as an offline/retry
+  // state so an unreachable daemon doesn't masquerade as "No chats yet".
+  String? _sessionsError;
   bool _drawerOpen = false;
   // url → reachable, from a short /health ping (drives the machine status dots).
   final Map<String, bool> _health = {};
@@ -142,11 +145,16 @@ class _DesktopShellState extends State<DesktopShell> {
         setState(() {
           _sessions = s;
           _sessionsLoading = false;
+          _sessionsError = null;
         });
       }
     } catch (_) {
+      // Unreachable daemon must not masquerade as "No chats yet" — surface it.
       if (identical(c, _client) && mounted) {
-        setState(() => _sessionsLoading = false);
+        setState(() {
+          _sessionsLoading = false;
+          _sessionsError = 'Can\'t reach this machine — check the daemon/tunnel.';
+        });
       }
     }
   }
@@ -252,6 +260,7 @@ class _DesktopShellState extends State<DesktopShell> {
         selectedSessionId: _sessionId,
         sessions: _sessions,
         sessionsLoading: _sessionsLoading,
+        sessionsError: _sessionsError,
         onRefreshSessions: _loadSessions,
         onNewSession: () {
           _newSessionFlow();
@@ -524,6 +533,7 @@ class _Sidebar extends StatefulWidget {
   final String? selectedSessionId;
   final List<SessionInfo>? sessions;
   final bool sessionsLoading;
+  final String? sessionsError;
   final VoidCallback onRefreshSessions;
   final VoidCallback onNewSession;
   final void Function(Instance) onSelectInstance;
@@ -541,6 +551,7 @@ class _Sidebar extends StatefulWidget {
     required this.selectedSessionId,
     required this.sessions,
     required this.sessionsLoading,
+    this.sessionsError,
     required this.onRefreshSessions,
     required this.onNewSession,
     required this.onSelectInstance,
@@ -723,6 +734,23 @@ class _SidebarState extends State<_Sidebar> {
     }
     final all = _sessions ?? const <SessionInfo>[];
     if (all.isEmpty) {
+      // Offline ≠ empty: a failed fetch gets an explicit error + retry.
+      if (widget.sessionsError != null) {
+        return Center(
+            child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const AppIcon('wifi-off', size: 20, color: AppColors.fg4),
+                  const SizedBox(height: 10),
+                  Text(widget.sessionsError!,
+                      textAlign: TextAlign.center,
+                      style: sans(12.5, color: AppColors.fg3)),
+                  const SizedBox(height: 12),
+                  TextButton(
+                      onPressed: widget.onRefreshSessions,
+                      child: Text('Retry', style: sans(12.5, color: AppColors.accent))),
+                ])));
+      }
       return Center(
           child: Padding(
               padding: const EdgeInsets.all(20),
@@ -765,9 +793,17 @@ class _SidebarState extends State<_Sidebar> {
               textAlign: TextAlign.center,
               style: sans(12.5, color: AppColors.fg4))));
     }
-    return ListView(
+    final listView = ListView(
         padding: EdgeInsets.fromLTRB(kMobile ? 12 : 8, 2, kMobile ? 12 : 8, 12),
         children: children);
+    // Phones: the natural refresh gesture. Desktop keeps the header button.
+    if (!kMobile) return listView;
+    return RefreshIndicator(
+      color: AppColors.accent,
+      backgroundColor: AppColors.surface2,
+      onRefresh: () async => widget.onRefreshSessions(),
+      child: listView,
+    );
   }
 
   Widget _filterChips(List<SessionInfo> all) {

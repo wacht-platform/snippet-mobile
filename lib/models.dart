@@ -180,6 +180,7 @@ class HarnessState {
   final RateWindow? rateSecondary;
   final List<Checkpoint> checkpoints;
   final GoalInfo? goal; // an active autonomous /goal, if any
+  final bool compacting; // a history-compaction pass is running
 
   HarnessState({
     required this.status,
@@ -199,6 +200,7 @@ class HarnessState {
     required this.rateSecondary,
     required this.checkpoints,
     required this.goal,
+    this.compacting = false,
   });
 
   factory HarnessState.fromJson(Map<String, dynamic> j) {
@@ -233,6 +235,7 @@ class HarnessState {
       goal: (j['goal'] is Map)
           ? GoalInfo.fromJson((j['goal'] as Map).cast<String, dynamic>())
           : null,
+      compacting: j['compacting'] as bool? ?? false,
     );
   }
 
@@ -261,6 +264,7 @@ class HarnessState {
       rateSecondary: base.rateSecondary,
       checkpoints: base.checkpoints,
       goal: base.goal,
+      compacting: base.compacting,
     );
   }
 }
