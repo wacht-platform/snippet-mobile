@@ -181,6 +181,7 @@ class HarnessState {
   final List<Checkpoint> checkpoints;
   final GoalInfo? goal; // an active autonomous /goal, if any
   final bool compacting; // a history-compaction pass is running
+  final int watchCount; // active file watches (monitor meta-tool)
 
   HarnessState({
     required this.status,
@@ -201,6 +202,7 @@ class HarnessState {
     required this.checkpoints,
     required this.goal,
     this.compacting = false,
+    this.watchCount = 0,
   });
 
   factory HarnessState.fromJson(Map<String, dynamic> j) {
@@ -236,6 +238,7 @@ class HarnessState {
           ? GoalInfo.fromJson((j['goal'] as Map).cast<String, dynamic>())
           : null,
       compacting: j['compacting'] as bool? ?? false,
+      watchCount: (j['watches'] as List?)?.length ?? 0,
     );
   }
 
@@ -265,6 +268,7 @@ class HarnessState {
       checkpoints: base.checkpoints,
       goal: base.goal,
       compacting: base.compacting,
+      watchCount: base.watchCount,
     );
   }
 }

@@ -703,6 +703,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     final facts = <String>[
       statusWord,
       if (s?.goal?.ongoing ?? false) (s!.goal!.paused ? '◇ goal paused' : '◇ goal'),
+      if ((s?.watchCount ?? 0) > 0) '◉ watching ${s!.watchCount}',
       if (_modelLabel != null) _modelLabel!,
       if (s != null && s.contextWindow > 0 && s.lastPromptTokens > 0)
         '${(s.lastPromptTokens / s.contextWindow * 100).clamp(0, 999).round()}% ctx',
@@ -1233,7 +1234,8 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   String _s(dynamic v) => v?.toString() ?? '';
 
   // Meta-tools have dedicated event rendering, so their generic tool lines are skipped.
-  bool _isMetaTool(String n) => n == 'note' || n == 'ask_user' || n == 'delegate_task';
+  bool _isMetaTool(String n) =>
+      n == 'note' || n == 'ask_user' || n == 'delegate_task' || n == 'complete_goal' || n == 'monitor';
 
   void _showNote(String text) {
     showAppSheet(context, title: 'Note', child: SelectableText(text, style: sans(13.5, height: 1.5, color: AppColors.fg1)));
