@@ -546,13 +546,18 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     super.dispose();
   }
 
-  bool _pendingApproval(List<Map<String, dynamic>> events) {
+  bool _pendingApproval(List<Map<String, dynamic>> events) => _pendingApprovalTotal(events) > 0;
+
+  // How many tool calls this batch is awaiting approval (0 = none pending). Drives
+  // whether "Approve all" is shown — it only makes sense with more than one.
+  int _pendingApprovalTotal(List<Map<String, dynamic>> events) {
     for (var i = events.length - 1; i >= 0; i--) {
-      final k = events[i]['kind'];
-      if (k == 'approval_request') return true;
-      if (k == 'tool_result' || k == 'assistant_text') return false;
+      final e = events[i];
+      final k = e['kind'];
+      if (k == 'approval_request') return (e['total'] as num?)?.toInt() ?? 1;
+      if (k == 'tool_result' || k == 'assistant_text') return 0;
     }
-    return false;
+    return 0;
   }
 
   @override
@@ -632,7 +637,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           if (waiting && _pendingApproval(events))
             _centerWide(Padding(
               padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
-              child: _ApprovalBar(onSend: _send),
+              child: _ApprovalBar(onSend: _send, showApproveAll: _pendingApprovalTotal(events) > 1),
             ))
           else if (waiting && s?.pendingQuestion != null)
             _centerWide(Padding(
@@ -1662,7 +1667,8 @@ class _QueuedBubble extends StatelessWidget {
 
 class _ApprovalBar extends StatefulWidget {
   final void Function(Map<String, dynamic>) onSend;
-  const _ApprovalBar({required this.onSend});
+  final bool showApproveAll; // only when >1 tool is pending this batch
+  const _ApprovalBar({required this.onSend, this.showApproveAll = false});
   @override
   State<_ApprovalBar> createState() => _ApprovalBarState();
 }
@@ -1695,8 +1701,10 @@ class _ApprovalBarState extends State<_ApprovalBar> {
           child: Row(children: [
             Expanded(child: Btn('Approve', small: true, icon: 'check', onTap: _sent ? null : () => _decide({'kind': 'approve'}))),
             const SizedBox(width: 8),
-            Expanded(child: Btn('Approve all', small: true, variant: BtnVariant.secondary, icon: 'check-check', onTap: _sent ? null : () => _decide({'kind': 'approve_all'}))),
-            const SizedBox(width: 8),
+            if (widget.showApproveAll) ...[
+              Expanded(child: Btn('Approve all', small: true, variant: BtnVariant.secondary, icon: 'check-check', onTap: _sent ? null : () => _decide({'kind': 'approve_all'}))),
+              const SizedBox(width: 8),
+            ],
             Btn('Deny', small: true, variant: BtnVariant.ghost, onTap: _sent ? null : () => _decide({'kind': 'deny'})),
           ]),
         ),
