@@ -162,7 +162,7 @@ class _DenseToolRowState extends State<DenseToolRow> {
   @override
   Widget build(BuildContext context) {
     final glyph = _pending
-        ? const SizedBox(width: 11, height: 11, child: CircularProgressIndicator(strokeWidth: 1.6, color: AppColors.run))
+        ? const _BrailleSpinner()
         : Text(_ok ? '✓' : '✗', style: mono(12, color: _ok ? AppColors.fg4 : AppColors.danger));
     final meta = _meta;
 
@@ -194,6 +194,38 @@ class _DenseToolRowState extends State<DenseToolRow> {
       ),
     );
   }
+}
+
+/// Terminal-style running indicator: the classic braille spinner, mono + amber —
+/// on-theme for Terminal Ink where the Material ring felt foreign.
+class _BrailleSpinner extends StatefulWidget {
+  const _BrailleSpinner();
+  @override
+  State<_BrailleSpinner> createState() => _BrailleSpinnerState();
+}
+
+class _BrailleSpinnerState extends State<_BrailleSpinner> {
+  static const _frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  Timer? _t;
+  int _i = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _t = Timer.periodic(const Duration(milliseconds: 90), (_) {
+      if (mounted) setState(() => _i = (_i + 1) % _frames.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(_frames[_i], style: mono(12, color: AppColors.run));
 }
 
 /// A run of consecutive tool rows behind a subtle left rail. Short runs render
