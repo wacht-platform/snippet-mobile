@@ -125,12 +125,19 @@ class DenseToolRow extends StatefulWidget {
 }
 
 class _DenseToolRowState extends State<DenseToolRow> {
-  bool _open = false;
-
   bool get _pending => widget.result == null;
   bool get _ok {
     final r = widget.result;
     return r is Map && r['status'] == 'success';
+  }
+
+  void _openDrawer(BuildContext context) {
+    showAppSheet(context,
+        title: toolTitle(widget.tool),
+        child: toolDetailView(context,
+            tool: widget.tool,
+            args: widget.args,
+            result: widget.result is Map ? (widget.result as Map).cast<String, dynamic>() : null));
   }
 
   // Right-aligned meta: bash exit code, edit diff stat, else ✓/✗.
@@ -159,49 +166,33 @@ class _DenseToolRowState extends State<DenseToolRow> {
         : Text(_ok ? '✓' : '✗', style: mono(12, color: _ok ? AppColors.fg4 : AppColors.danger));
     final meta = _meta;
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      InkWell(
-        borderRadius: BorderRadius.circular(R.xs),
-        onTap: () => setState(() => _open = !_open),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(width: 16, child: Center(child: glyph)),
-            const SizedBox(width: 6),
-            Text(widget.tool, style: mono(12, weight: FontWeight.w600, color: AppColors.fg2)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                toolArgSummary(widget.tool, widget.args),
-                maxLines: _open ? 4 : 1,
-                overflow: TextOverflow.ellipsis,
-                style: mono(12, color: AppColors.fg3),
-              ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(R.xs),
+      onTap: () => _openDrawer(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 16, child: Center(child: glyph)),
+          const SizedBox(width: 6),
+          Text(widget.tool, style: mono(12, weight: FontWeight.w600, color: AppColors.fg2)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              toolArgSummary(widget.tool, widget.args),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: mono(12, color: AppColors.fg3),
             ),
-            if (meta.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Text(meta, style: mono(11, color: _ok ? AppColors.fg4 : AppColors.danger)),
-            ],
-            const SizedBox(width: 4),
-            AppIcon(_open ? 'chevron-down' : 'chevron-right', size: 13, color: AppColors.fg4),
-          ]),
-        ),
+          ),
+          if (meta.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Text(meta, style: mono(11, color: _ok ? AppColors.fg4 : AppColors.danger)),
+          ],
+          const SizedBox(width: 4),
+          const AppIcon('chevron-right', size: 13, color: AppColors.fg4),
+        ]),
       ),
-      if (_open)
-        Container(
-          margin: const EdgeInsets.only(left: 22, bottom: 8, top: 2),
-          padding: const EdgeInsets.all(10),
-          constraints: const BoxConstraints(maxHeight: 300),
-          decoration: BoxDecoration(
-            color: AppColors.surface1,
-            borderRadius: BorderRadius.circular(R.sm),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: SingleChildScrollView(
-            child: toolDetailView(context, tool: widget.tool, args: widget.args, result: widget.result is Map ? (widget.result as Map).cast<String, dynamic>() : null),
-          ),
-        ),
-    ]);
+    );
   }
 }
 
