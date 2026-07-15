@@ -51,13 +51,13 @@ class AppColors {
 /// screen); desktop keeps the lighter canvas against the darker sidebar.
 Color get readingBg => kMobile ? AppColors.bg : AppColors.canvas;
 
-// Terminal Ink: crisper corners — enough rounding to feel finished, not soft.
+// Terminal Ink, softened: crisp but friendly corners.
 class R {
-  static const card = 10.0;
-  static const md = 8.0; // buttons, inputs, icon buttons
-  static const sm = 6.0; // menu items, list rows
-  static const xs = 5.0; // inner chips
-  static const sheetTop = 14.0;
+  static const card = 14.0;
+  static const md = 10.0; // buttons, inputs, icon buttons
+  static const sm = 8.0; // menu items, list rows
+  static const xs = 6.0; // inner chips
+  static const sheetTop = 18.0;
 }
 
 /// Type helpers — Terminal Ink: IBM Plex Sans for prose, Source Code Pro for
