@@ -60,10 +60,9 @@ class R {
   static const sheetTop = 18.0;
 }
 
-/// Type helpers — Terminal Ink: Space Grotesk for prose (enough character to
-/// carry hierarchy at a single weight), Source Code Pro for everything
-/// technical. EVERYTHING renders regular (400): hierarchy comes from size and
-/// color, never boldness.
+/// Type helpers — Terminal Ink is mono-forward: JetBrains Mono EVERYWHERE (a
+/// real, readable programming font), all at regular (400). Hierarchy comes from
+/// size and color, never boldness or a second face.
 FontWeight _cap(FontWeight w) => w.value > 400 ? FontWeight.w400 : w;
 
 TextStyle sans(double size,
@@ -71,7 +70,7 @@ TextStyle sans(double size,
         double? height,
         double? spacing,
         Color color = AppColors.fg1}) =>
-    GoogleFonts.spaceGrotesk(
+    GoogleFonts.jetBrainsMono(
       fontSize: size,
       fontWeight: _cap(weight),
       height: height,
@@ -81,7 +80,7 @@ TextStyle sans(double size,
 
 /// Large display titles (page headers) — same face, tighter tracking.
 TextStyle display(double size, {Color color = AppColors.fg1, double? height}) =>
-    GoogleFonts.spaceGrotesk(
+    GoogleFonts.jetBrainsMono(
       fontSize: size,
       fontWeight: FontWeight.w400,
       height: height,
@@ -94,7 +93,7 @@ TextStyle mono(double size,
         {FontWeight weight = FontWeight.w400,
         double? height,
         Color color = AppColors.fg1}) =>
-    GoogleFonts.sourceCodePro(
+    GoogleFonts.jetBrainsMono(
       fontSize: size,
       fontWeight: _cap(weight),
       height: height,
@@ -102,7 +101,7 @@ TextStyle mono(double size,
     );
 
 /// The code font family name (for widgets that need a raw family, e.g. re_editor).
-String get monoFamily => GoogleFonts.sourceCodePro().fontFamily ?? 'monospace';
+String get monoFamily => GoogleFonts.jetBrainsMono().fontFamily ?? 'monospace';
 
 ThemeData buildAppTheme() {
   final base = ThemeData(
@@ -135,7 +134,7 @@ ThemeData buildAppTheme() {
       shadowColor: Colors.black54,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.md), side: const BorderSide(color: AppColors.border2)),
     ),
-    textTheme: _allRegular(GoogleFonts.geistTextTheme(base.textTheme)
+    textTheme: _allRegular(GoogleFonts.jetBrainsMonoTextTheme(base.textTheme)
         .apply(bodyColor: AppColors.fg1, displayColor: AppColors.fg1)),
     // Subtle dividers everywhere (incl. PopupMenuDivider) — no bright lines.
     dividerTheme: const DividerThemeData(color: AppColors.border, thickness: 1, space: 12),
