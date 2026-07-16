@@ -131,6 +131,13 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   bool _freshConn = false;
   Timer? _ackTimer;
 
+  // An approve/deny/answer decision can die on a dead socket exactly like a
+  // message — but it isn't in _pending, so the approval bar hangs at "Sending…"
+  // forever. Track the last decision until the run leaves waiting_for_input;
+  // resend it on reconnect and force a resync if it doesn't resolve.
+  Map<String, dynamic>? _pendingDecision;
+  Timer? _decisionTimer;
+
   // Force a fresh snapshot when an optimistic message hasn't been echoed in time —
   // the reconnect path then resends whatever the server truly never received.
   void _armAckWatchdog() {
@@ -143,6 +150,25 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         _resync(ch); // tear down → fresh snapshot → unacked _pending resend
       }
     });
+  }
+
+  // Send an approve/deny/answer and hold it until the run acknowledges it (leaves
+  // waiting_for_input). If it doesn't in time, the decision was lost — resync and
+  // resend so the approval bar can't hang at "Sending…".
+  void _sendDecision(Map<String, dynamic> m) {
+    final k = m['kind'];
+    if (k == 'approve' || k == 'approve_all' || k == 'deny' || k == 'answer') {
+      _pendingDecision = m;
+      _decisionTimer?.cancel();
+      _decisionTimer = Timer(const Duration(seconds: 6), () {
+        if (!mounted || _closed || _pendingDecision == null) return;
+        if (_state?.status == 'waiting_for_input') {
+          final ch = _channel;
+          if (ch != null) _resync(ch); // fresh snapshot → decision resend below
+        }
+      });
+    }
+    _send(m);
   }
   late String _title;
   // Tracks the last status so we can detect running → paused and flush _queued.
@@ -308,6 +334,13 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             _queued.clear();
           }
           _prevStatus = next.status;
+          // A pending approval/answer is acknowledged the moment the run leaves
+          // waiting_for_input — clear it so its watchdog can't fire a needless
+          // resync (and so a resent decision isn't double-applied).
+          if (next.status != 'waiting_for_input' && _pendingDecision != null) {
+            _pendingDecision = null;
+            _decisionTimer?.cancel();
+          }
           // Retire optimistic bubbles as the daemon echoes user turns back —
           // FIFO by COUNT of user_input/steer events, not by exact text (the
           // daemon trims/normalizes, so text equality left stuck/dup bubbles).
@@ -335,6 +368,17 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
                 ch.sink.add(jsonEncode({'kind': 'user_message', 'value': m}));
               } catch (_) {
                 _outbox.add(jsonEncode({'kind': 'user_message', 'value': m}));
+              }
+            }
+            // A decision still pending while the snapshot STILL shows the run
+            // waiting means it never landed — resend it. (If it had landed, the
+            // status/clear above already dropped it, so no double-approve.)
+            if (_pendingDecision != null && next.status == 'waiting_for_input') {
+              final payload = jsonEncode(_pendingDecision);
+              try {
+                ch.sink.add(payload);
+              } catch (_) {
+                _outbox.add(payload);
               }
             }
           }
@@ -619,6 +663,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     _closed = true;
     _reconnectTimer?.cancel();
     _ackTimer?.cancel();
+    _decisionTimer?.cancel();
     _sub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     // Only clear the suppression key if this screen still owns it — on a session
@@ -753,12 +798,12 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           if (waiting && _pendingApproval(events))
             _centerWide(Padding(
               padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
-              child: _ApprovalBar(onSend: _send, showApproveAll: _pendingApprovalTotal(events) > 1),
+              child: _ApprovalBar(onSend: _sendDecision, showApproveAll: _pendingApprovalTotal(events) > 1),
             ))
           else if (waiting && s?.pendingQuestion != null)
             _centerWide(Padding(
               padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
-              child: _QuestionBar(question: s!.pendingQuestion!, onSend: _send),
+              child: _QuestionBar(question: s!.pendingQuestion!, onSend: _sendDecision),
             )),
           _centerWide(_inputBar(running)),
         ]),
