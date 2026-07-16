@@ -17,6 +17,7 @@ import '../theme.dart';
 import '../transcript.dart';
 import '../panel.dart';
 import '../widgets.dart';
+import 'editor.dart';
 import 'files.dart';
 import 'git.dart';
 
@@ -1276,6 +1277,9 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         case 'system_decision':
           endTools();
           out.add(SystemRow(step: _s(e['step']), reasoning: _s(e['reasoning'])));
+        case 'file_presented':
+          endTools();
+          out.add(_presentedFileCard(_s(e['path']), _s(e['caption'])));
         case 'lane_spawned':
           endTools();
           final id = _s(e['id']);
@@ -1317,11 +1321,46 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     return out;
   }
 
+  /// A file the agent handed over (present_file): an openable card — tap to
+  /// view it in the editor.
+  Widget _presentedFileCard(String path, String caption) {
+    final name = path.split('/').last;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: AppCard(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        onTap: () => presentScreen(
+          context,
+          builder: (_, close) => EditorScreen(client: widget.client, path: path, name: name, onClose: close),
+        ),
+        child: Row(children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: AppColors.accentBg, borderRadius: BorderRadius.circular(R.sm)),
+            child: const AppIcon('file', size: 16, color: AppColors.accent),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(13, color: AppColors.fg1)),
+              const SizedBox(height: 2),
+              Text(caption.isNotEmpty ? caption : path, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(11.5, color: AppColors.fg3)),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          const AppIcon('chevron-right', size: 16, color: AppColors.fg4),
+        ]),
+      ),
+    );
+  }
+
   String _s(dynamic v) => v?.toString() ?? '';
 
   // Meta-tools have dedicated event rendering, so their generic tool lines are skipped.
   bool _isMetaTool(String n) =>
-      n == 'note' || n == 'ask_user' || n == 'delegate_task' || n == 'complete_goal' || n == 'monitor';
+      n == 'note' || n == 'ask_user' || n == 'delegate_task' || n == 'complete_goal' || n == 'monitor' || n == 'present_file';
 
   void _showNote(String text) {
     showAppSheet(context, title: 'Note', child: SelectableText(text, style: sans(13.5, height: 1.5, color: AppColors.fg1)));
