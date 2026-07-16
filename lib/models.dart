@@ -79,6 +79,24 @@ class ServerConfig {
         hostname = j['hostname'] as String? ?? '';
 }
 
+/// One entry from a provider's live model catalog (POST /provider/models).
+/// Capability fields are null when the provider doesn't report them — only
+/// Anthropic reports effort tiers; OpenRouter reports reasoning support.
+class CatalogModel {
+  final String id;
+  final String? displayName;
+  final int? contextWindow;
+  final List<String>? efforts;
+  final bool? reasoning;
+
+  CatalogModel.fromJson(Map<String, dynamic> j)
+      : id = j['id'] as String? ?? '',
+        displayName = j['display_name'] as String?,
+        contextWindow = (j['context_window'] as num?)?.toInt(),
+        efforts = (j['efforts'] as List?)?.cast<String>(),
+        reasoning = j['reasoning'] as bool?;
+}
+
 class SessionInfo {
   final String id;
   final String folder;

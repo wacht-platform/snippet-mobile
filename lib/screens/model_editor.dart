@@ -45,6 +45,10 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
   bool _busy = false;
   String? _error;
 
+  /// Capability line under the Model field, from the provider's live catalog
+  /// (effort tiers on Anthropic, reasoning yes/no on OpenRouter, context size).
+  String? _modelHint;
+
   bool get _isEdit => widget.existing != null;
   bool get _isChatgpt => _provider == 'chatgpt';
 
@@ -76,6 +80,54 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
     _ctx.dispose();
     _key.dispose();
     super.dispose();
+  }
+
+  static String _fmtCtx(int n) => n >= 1000000
+      ? '${(n / 1000000).toStringAsFixed(n % 1000000 == 0 ? 0 : 1)}M ctx'
+      : '${(n / 1000).round()}k ctx';
+
+  void _applyPick(CatalogModel m) {
+    _model.text = m.id;
+    // A reported context window beats whatever was there — it's authoritative.
+    if (m.contextWindow != null && m.contextWindow! > 0) _ctx.text = '${m.contextWindow}';
+    final bits = <String>[];
+    if (m.efforts != null) {
+      bits.add(m.efforts!.isEmpty ? 'no effort control' : 'effort: ${m.efforts!.join(' · ')}');
+    } else if (m.reasoning != null) {
+      bits.add(m.reasoning! ? 'supports reasoning' : 'no reasoning');
+    }
+    if (m.contextWindow != null && m.contextWindow! > 0) bits.add(_fmtCtx(m.contextWindow!));
+    setState(() => _modelHint = bits.isEmpty ? null : bits.join(' · '));
+  }
+
+  Future<void> _browseModels() async {
+    setState(() => _error = null);
+    final List<CatalogModel> models;
+    try {
+      models = await widget.client.providerModels(
+        name: widget.existing?.name,
+        provider: _provider,
+        baseUrl: _baseUrl.text.trim(),
+        apiKey: _key.text.trim(),
+      );
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+      return;
+    }
+    if (!mounted) return;
+    if (models.isEmpty) {
+      setState(() => _error = 'The provider returned no models (this provider may not have a catalog).');
+      return;
+    }
+    final picked = await showModalBottomSheet<CatalogModel>(
+      context: context,
+      backgroundColor: AppColors.surface1,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(R.sheetTop))),
+      builder: (ctx) => _ModelPickerSheet(models: models),
+    );
+    if (picked != null) _applyPick(picked);
   }
 
   Future<void> _save() async {
@@ -143,7 +195,17 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
                   AppField(label: 'Base URL', controller: _baseUrl, mono: true, hint: 'https://api.example.com/v1'),
                   const SizedBox(height: 16),
                 ],
-                AppField(label: 'Model', controller: _model, mono: true, hint: 'claude-sonnet-4.5'),
+                Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Expanded(child: AppField(label: 'Model', controller: _model, mono: true, hint: 'claude-sonnet-4.5')),
+                  if (!_isChatgpt) ...[
+                    const SizedBox(width: 8),
+                    IconBtn('list', size: 44, iconSize: 18, onTap: _busy ? null : _browseModels),
+                  ],
+                ]),
+                if (_modelHint != null) ...[
+                  const SizedBox(height: 6),
+                  Text(_modelHint!, style: mono(11, height: 1.4, color: AppColors.fg3)),
+                ],
                 const SizedBox(height: 16),
                 AppField(
                   label: 'Context window (tokens)',
@@ -157,12 +219,12 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
                 Text('Reasoning effort', style: sans(12, weight: FontWeight.w500, color: AppColors.fg2)),
                 const SizedBox(height: 7),
                 Pills<String>(
-                  items: const [('', 'Default'), ('off', 'Off'), ('low', 'Low'), ('medium', 'Medium'), ('high', 'High'), ('xhigh', 'X-High')],
+                  items: const [('', 'Default'), ('off', 'Off'), ('low', 'Low'), ('medium', 'Medium'), ('high', 'High'), ('xhigh', 'X-High'), ('max', 'Max')],
                   selected: _effort,
                   onSelect: (val) => setState(() => _effort = val),
                 ),
                 const SizedBox(height: 6),
-                Text("Higher means more thinking — better on hard problems, more tokens. Default uses the provider's own; Off disables reasoning. X-High is the top tier (e.g. gpt-5.1-codex-max) and falls back to the model's max where unsupported. Applies to reasoning models (OpenAI/Codex, Gemini, Anthropic).",
+                Text("Higher means more thinking — better on hard problems, more tokens. Default uses the provider's own; Off disables reasoning. X-High/Max are the top tiers (gpt-5.1-codex-max, gpt-5.6, Claude). If a model rejects a tier, snippet steps down automatically instead of failing.",
                     style: sans(11.5, height: 1.4, color: AppColors.fg4)),
                 const SizedBox(height: 16),
                 if (_isChatgpt)
@@ -206,6 +268,100 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
             ]),
           ),
         ]),
+      ),
+    );
+  }
+}
+
+/// Searchable list over the provider's live model catalog. Rows show the raw
+/// model ID (that's what gets sent) with capability metadata as the subtitle.
+class _ModelPickerSheet extends StatefulWidget {
+  final List<CatalogModel> models;
+  const _ModelPickerSheet({required this.models});
+  @override
+  State<_ModelPickerSheet> createState() => _ModelPickerSheetState();
+}
+
+class _ModelPickerSheetState extends State<_ModelPickerSheet> {
+  final _query = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // AppField has no onChanged — rebuild the filtered list as the user types.
+    _query.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _query.text.trim().toLowerCase();
+    final filtered = q.isEmpty
+        ? widget.models
+        : widget.models
+            .where((m) =>
+                m.id.toLowerCase().contains(q) ||
+                (m.displayName?.toLowerCase().contains(q) ?? false))
+            .toList();
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const SizedBox(height: 10),
+            Container(width: 36, height: 4, decoration: BoxDecoration(color: AppColors.surface3, borderRadius: BorderRadius.circular(2))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: AppField(
+                label: 'Models (${widget.models.length})',
+                controller: _query,
+                mono: true,
+                hint: 'filter…',
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: filtered.length,
+                itemBuilder: (ctx, i) {
+                  final m = filtered[i];
+                  final meta = <String>[
+                    if (m.efforts != null)
+                      m.efforts!.isEmpty ? 'no effort control' : 'effort: ${m.efforts!.join('/')}'
+                    else if (m.reasoning != null)
+                      m.reasoning! ? 'reasoning' : 'no reasoning',
+                    if ((m.contextWindow ?? 0) > 0)
+                      _ModelEditorScreenState._fmtCtx(m.contextWindow!),
+                  ];
+                  return InkWell(
+                    onTap: () => Navigator.pop(ctx, m),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(m.id, style: mono(13, color: AppColors.fg1)),
+                        if (m.displayName != null || meta.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            [if (m.displayName != null) m.displayName!, ...meta].join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: sans(11.5, color: AppColors.fg3),
+                          ),
+                        ],
+                      ]),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }

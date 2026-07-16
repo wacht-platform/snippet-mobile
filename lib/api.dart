@@ -150,6 +150,24 @@ class DaemonClient {
     if (r.statusCode != 200) throw _err('set active', r);
   }
 
+  /// Live model catalog from the provider's own models API (the key stays on
+  /// the daemon). For a saved profile pass [name]; for an editor draft pass
+  /// provider/baseUrl/apiKey — a stored key is used when [apiKey] is empty.
+  Future<List<CatalogModel>> providerModels(
+      {String? name, String? provider, String? baseUrl, String? apiKey}) async {
+    final body = <String, dynamic>{};
+    if (name != null && name.isNotEmpty) body['name'] = name;
+    if (provider != null && provider.isNotEmpty) body['provider'] = provider;
+    if (baseUrl != null && baseUrl.isNotEmpty) body['base_url'] = baseUrl;
+    if (apiKey != null && apiKey.isNotEmpty) body['api_key'] = apiKey;
+    final r = await http.post(_uri('/provider/models'),
+        headers: _json, body: jsonEncode(body));
+    if (r.statusCode != 200) throw _err('list models', r);
+    return ((jsonDecode(r.body) as Map<String, dynamic>)['models'] as List? ?? const [])
+        .map((e) => CatalogModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Set the profile delegated lanes run on. Pass null/'' to clear (delegation
   /// falls back to the active model).
   Future<void> setDelegateProfile(String? name) async {
