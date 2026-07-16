@@ -60,17 +60,18 @@ class R {
   static const sheetTop = 18.0;
 }
 
-/// Type helpers — Terminal Ink: IBM Plex Sans for prose, Source Code Pro for
-/// everything technical. Weights are allowed up to semibold for hierarchy, but
-/// capped there so nothing shouts.
-FontWeight _cap(FontWeight w) => w.value > 500 ? FontWeight.w500 : w;
+/// Type helpers — Terminal Ink: Space Grotesk for prose (enough character to
+/// carry hierarchy at a single weight), Source Code Pro for everything
+/// technical. EVERYTHING renders regular (400): hierarchy comes from size and
+/// color, never boldness.
+FontWeight _cap(FontWeight w) => w.value > 400 ? FontWeight.w400 : w;
 
 TextStyle sans(double size,
         {FontWeight weight = FontWeight.w400,
         double? height,
         double? spacing,
         Color color = AppColors.fg1}) =>
-    GoogleFonts.ibmPlexSans(
+    GoogleFonts.spaceGrotesk(
       fontSize: size,
       fontWeight: _cap(weight),
       height: height,
@@ -78,11 +79,11 @@ TextStyle sans(double size,
       color: color,
     );
 
-/// Large display titles (page headers) — same face, a notch heavier + tighter.
+/// Large display titles (page headers) — same face, tighter tracking.
 TextStyle display(double size, {Color color = AppColors.fg1, double? height}) =>
-    GoogleFonts.ibmPlexSans(
+    GoogleFonts.spaceGrotesk(
       fontSize: size,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w400,
       height: height,
       letterSpacing: -0.3,
       color: color,
