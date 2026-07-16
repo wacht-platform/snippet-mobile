@@ -63,6 +63,9 @@ class ModelProfile {
 class ServerConfig {
   final List<ModelProfile> profiles;
   final String? active;
+
+  /// Profile that delegated lanes run on; null → they use the active model.
+  final String? delegate;
   final bool manualApproval;
   final String hostname;
 
@@ -71,6 +74,7 @@ class ServerConfig {
             .map((e) => ModelProfile.fromJson(e as Map<String, dynamic>))
             .toList(),
         active = j['active'] as String?,
+        delegate = j['delegate'] as String?,
         manualApproval = j['manual_approval'] == true,
         hostname = j['hostname'] as String? ?? '';
 }

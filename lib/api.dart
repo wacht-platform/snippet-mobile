@@ -150,6 +150,14 @@ class DaemonClient {
     if (r.statusCode != 200) throw _err('set active', r);
   }
 
+  /// Set the profile delegated lanes run on. Pass null/'' to clear (delegation
+  /// falls back to the active model).
+  Future<void> setDelegateProfile(String? name) async {
+    final r = await http.post(_uri('/config/delegate'),
+        headers: _json, body: jsonEncode({'name': name ?? ''}));
+    if (r.statusCode != 200) throw _err('set delegate', r);
+  }
+
   Future<void> deleteProfile(String name) async {
     final r = await http.delete(_uri('/config/profile', {'name': name}));
     if (r.statusCode != 200) throw _err('delete profile', r);

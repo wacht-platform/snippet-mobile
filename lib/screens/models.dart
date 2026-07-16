@@ -71,9 +71,21 @@ class _ModelsScreenState extends State<ModelsScreen> {
                       const EmptyState(icon: 'cpu', title: 'No model configured', body: 'Add a model profile with an API key before starting a session.'),
                       const SizedBox(height: 10),
                     ],
-                    ...profiles.map(_profileCard),
+                    ...profiles.map((p) => _profileCard(p, snap.data?.delegate)),
                     const SizedBox(height: 2),
                     AddCard(label: 'Add model', onTap: () => _edit(null)),
+                    if (profiles.length > 1) ...[
+                      const SizedBox(height: 6),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          snap.data?.delegate == null || snap.data!.delegate!.isEmpty
+                              ? 'Delegated lanes use the active model. Tap ⋮ on a profile to run them on a different one.'
+                              : 'Delegated lanes run on “${snap.data!.delegate}”.',
+                          style: mono(11, height: 1.4, color: AppColors.fg3),
+                        ),
+                      ),
+                    ],
                   ],
                 );
                 // Don't stretch full-width on desktop — keep a readable column.
@@ -86,7 +98,8 @@ class _ModelsScreenState extends State<ModelsScreen> {
     );
   }
 
-  Widget _profileCard(ModelProfile p) {
+  Widget _profileCard(ModelProfile p, String? delegate) {
+    final isDelegate = delegate != null && delegate.isNotEmpty && delegate == p.name;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: AppCard(
@@ -109,6 +122,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
               Row(children: [
                 Flexible(child: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: sans(14, color: AppColors.fg1))),
                 if (p.active) ...[const SizedBox(width: 8), _activeChip()],
+                if (isDelegate) ...[const SizedBox(width: 8), _delegateChip()],
                 if (!p.usable) ...[const SizedBox(width: 8), const WarnChip()],
               ]),
               const SizedBox(height: 4),
@@ -116,7 +130,7 @@ class _ModelsScreenState extends State<ModelsScreen> {
             ]),
           ),
           IconBtn('edit', size: 34, iconSize: 16, onTap: () => _edit(p)),
-          IconBtn('trash', size: 34, iconSize: 16, onTap: () => _run(() => widget.client.deleteProfile(p.name), 'delete')),
+          _overflowMenu(p, isDelegate),
         ]),
       ),
     );
@@ -126,5 +140,47 @@ class _ModelsScreenState extends State<ModelsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
         decoration: BoxDecoration(color: AppColors.accentBg, borderRadius: BorderRadius.circular(R.xs)),
         child: Text('ACTIVE', style: sans(9.5, spacing: 0.5, color: AppColors.accent)),
+      );
+
+  Widget _delegateChip() => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(color: AppColors.runBg, borderRadius: BorderRadius.circular(R.xs)),
+        child: Text('DELEGATE', style: sans(9.5, spacing: 0.5, color: AppColors.run)),
+      );
+
+  Widget _overflowMenu(ModelProfile p, bool isDelegate) => PopupMenuButton<String>(
+        tooltip: '',
+        color: AppColors.surface1,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(R.md),
+          side: const BorderSide(color: AppColors.border2),
+        ),
+        icon: AppIcon('more-vertical', size: 16, color: AppColors.fg3),
+        onSelected: (v) {
+          switch (v) {
+            case 'delegate':
+              _run(() => widget.client.setDelegateProfile(p.name), 'set delegate');
+              break;
+            case 'undelegate':
+              _run(() => widget.client.setDelegateProfile(null), 'clear delegate');
+              break;
+            case 'delete':
+              _run(() => widget.client.deleteProfile(p.name), 'delete');
+              break;
+          }
+        },
+        itemBuilder: (_) => [
+          PopupMenuItem(
+            value: isDelegate ? 'undelegate' : 'delegate',
+            child: Text(
+              isDelegate ? 'Stop delegating to this' : 'Use for delegated lanes',
+              style: sans(13, color: AppColors.fg1),
+            ),
+          ),
+          PopupMenuItem(
+            value: 'delete',
+            child: Text('Delete profile', style: sans(13, color: AppColors.danger)),
+          ),
+        ],
       );
 }
