@@ -13,6 +13,7 @@ const _providers = [
   ('openai-compatible', 'OpenAI-compatible'),
   ('anthropic-compatible', 'Anthropic-compatible'),
   ('openrouter', 'OpenRouter'),
+  ('xai', 'xAI (Grok)'),
 ];
 
 bool _needsBaseUrl(String p) => p == 'openai-compatible' || p == 'anthropic-compatible';
