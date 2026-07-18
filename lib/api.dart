@@ -185,6 +185,25 @@ class DaemonClient {
     if (r.statusCode != 200) throw _err('vault delete', r);
   }
 
+  /// Begin xAI (Grok/X subscription) device-code sign-in. Returns the user code
+  /// and verification URL to show; the daemon polls for approval in the background.
+  Future<({String userCode, String verificationUri})> xaiLoginBegin() async {
+    final r = await http.post(_uri('/xai/login'), headers: _json);
+    if (r.statusCode != 200) throw _err('xai login', r);
+    final j = jsonDecode(r.body) as Map<String, dynamic>;
+    return (userCode: j['user_code'] as String, verificationUri: j['verification_uri'] as String);
+  }
+
+  Future<bool> xaiSignedIn() async {
+    final r = await http.get(_uri('/xai/status'));
+    if (r.statusCode != 200) return false;
+    return (jsonDecode(r.body) as Map<String, dynamic>)['signed_in'] == true;
+  }
+
+  Future<void> xaiLogout() async {
+    await http.post(_uri('/xai/logout'), headers: _json);
+  }
+
   /// Set the profile delegated lanes run on. Pass null/'' to clear (delegation
   /// falls back to the active model).
   Future<void> setDelegateProfile(String? name) async {

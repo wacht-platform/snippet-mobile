@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../models.dart';
@@ -52,6 +54,7 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
 
   bool get _isEdit => widget.existing != null;
   bool get _isChatgpt => _provider == 'chatgpt';
+  bool get _isXai => _provider == 'xai';
 
   @override
   void initState() {
@@ -230,6 +233,8 @@ class _ModelEditorScreenState extends State<ModelEditorScreen> {
                 const SizedBox(height: 16),
                 if (_isChatgpt)
                   Text('ChatGPT uses the subscription login set up in the TUI — no API key here.', style: sans(12, height: 1.4, color: AppColors.fg3))
+                else if (_isXai)
+                  _XaiSignIn(client: widget.client)
                 else
                   AppField(
                     label: 'API key',
@@ -365,5 +370,107 @@ class _ModelPickerSheetState extends State<_ModelPickerSheet> {
         ),
       ),
     );
+  }
+}
+
+/// xAI subscription (SuperGrok / X Premium) sign-in via the daemon's device-code
+/// flow: shows the code + verification URL, then polls until the token is stored.
+class _XaiSignIn extends StatefulWidget {
+  final DaemonClient client;
+  const _XaiSignIn({required this.client});
+  @override
+  State<_XaiSignIn> createState() => _XaiSignInState();
+}
+
+class _XaiSignInState extends State<_XaiSignIn> {
+  bool _loading = true;
+  bool _signedIn = false;
+  String? _code;
+  String? _url;
+  Timer? _poll;
+  String? _err;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final on = await widget.client.xaiSignedIn();
+    if (mounted) setState(() { _signedIn = on; _loading = false; });
+  }
+
+  Future<void> _begin() async {
+    setState(() { _err = null; _loading = true; });
+    try {
+      final d = await widget.client.xaiLoginBegin();
+      if (!mounted) return;
+      setState(() { _code = d.userCode; _url = d.verificationUri; _loading = false; });
+      _poll?.cancel();
+      _poll = Timer.periodic(const Duration(seconds: 3), (_) async {
+        if (await widget.client.xaiSignedIn()) {
+          _poll?.cancel();
+          if (mounted) setState(() { _signedIn = true; _code = null; _url = null; });
+        }
+      });
+    } catch (e) {
+      if (mounted) setState(() { _err = '$e'; _loading = false; });
+    }
+  }
+
+  Future<void> _signOut() async {
+    await widget.client.xaiLogout();
+    if (mounted) setState(() => _signedIn = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading && _code == null) {
+      return const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3));
+    }
+    if (_signedIn) {
+      return Row(children: [
+        const AppIcon('check', size: 16, color: AppColors.ok),
+        const SizedBox(width: 8),
+        Text('Signed in to xAI', style: sans(13, color: AppColors.fg2)),
+        const Spacer(),
+        GestureDetector(onTap: _signOut, child: Text('Sign out', style: sans(12, color: AppColors.fg3))),
+      ]);
+    }
+    if (_code != null) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Open this URL and enter the code:', style: sans(12.5, height: 1.4, color: AppColors.fg2)),
+        const SizedBox(height: 8),
+        SelectableText(_url ?? '', style: mono(12.5, color: AppColors.accent)),
+        const SizedBox(height: 8),
+        Row(children: [
+          Text(_code!, style: mono(18, weight: FontWeight.w600, color: AppColors.fg1)),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: () => Clipboard.setData(ClipboardData(text: _code!)),
+            child: Text('copy', style: sans(12, color: AppColors.fg3)),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3)),
+          const SizedBox(width: 8),
+          Text('Waiting for approval…', style: sans(12, color: AppColors.fg3)),
+        ]),
+      ]);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Grok uses your SuperGrok / X Premium subscription — no API key.', style: sans(12, height: 1.4, color: AppColors.fg3)),
+      const SizedBox(height: 10),
+      Btn('Sign in with SuperGrok / X Premium', icon: 'key', small: true, onTap: _begin),
+      if (_err != null) ...[const SizedBox(height: 8), Text(_err!, style: sans(12, color: AppColors.danger))],
+    ]);
   }
 }
