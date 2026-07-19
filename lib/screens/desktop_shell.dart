@@ -26,15 +26,35 @@ class DesktopShell extends StatefulWidget {
   State<DesktopShell> createState() => _DesktopShellState();
 }
 
+/// One open tab in the shell — a live session on a given instance. (Files will
+/// join this list later; for now every tab is a chat session.)
+class _ShellTab {
+  final DaemonClient client;
+  final String instanceUrl;
+  final String sessionId;
+  String title;
+  String? profile;
+  _ShellTab({
+    required this.client,
+    required this.instanceUrl,
+    required this.sessionId,
+    required this.title,
+    this.profile,
+  });
+}
+
 class _DesktopShellState extends State<DesktopShell> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final InstanceStore _store = InstanceStore();
   List<Instance> _instances = const [];
   Instance? _active;
   DaemonClient? _client;
-  String? _sessionId;
-  String _sessionTitle = '';
-  String? _sessionProfile;
+  final List<_ShellTab> _tabs = [];
+  int _activeIndex = -1;
+  final PageController _pageController = PageController();
+  _ShellTab? get _activeTab =>
+      (_activeIndex >= 0 && _activeIndex < _tabs.length) ? _tabs[_activeIndex] : null;
+  String? get _sessionId => _activeTab?.sessionId;
   bool _loading = true;
   // Session list lives here (not in the sidebar) so it survives drawer open/close
   // and is shared with the "recent sessions" placeholder.
@@ -67,8 +87,36 @@ class _DesktopShellState extends State<DesktopShell> {
   @override
   void dispose() {
     _sessionsTicker?.cancel();
+    _pageController.dispose();
     if (onNotifTap == _onNotif) onNotifTap = null;
     super.dispose();
+  }
+
+  void _syncPage() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_pageController.hasClients && _activeIndex >= 0) {
+        _pageController.jumpToPage(_activeIndex);
+      }
+    });
+  }
+
+  void _closeTab(int i) {
+    setState(() {
+      _tabs.removeAt(i);
+      if (_tabs.isEmpty) {
+        _activeIndex = -1;
+      } else if (_activeIndex >= _tabs.length) {
+        _activeIndex = _tabs.length - 1;
+      } else if (i < _activeIndex) {
+        _activeIndex--;
+      }
+    });
+    _syncPage();
+  }
+
+  void _activateTab(int i) {
+    setState(() => _activeIndex = i);
+    _syncPage();
   }
 
   void _onNotif(Map<String, dynamic> m) async {
@@ -100,11 +148,9 @@ class _DesktopShellState extends State<DesktopShell> {
     setState(() {
       _active = resolved;
       _client = DaemonClient(resolved.url, resolved.token);
-      _sessionId = sid;
-      _sessionTitle = '${m['title'] ?? 'session'}';
-      _sessionProfile = null;
       _sessions = null;
     });
+    _openSession(sid, '${m['title'] ?? 'session'}', null);
     _loadSessions();
   }
 
@@ -189,18 +235,33 @@ class _DesktopShellState extends State<DesktopShell> {
     setState(() {
       _active = inst;
       _client = DaemonClient(inst.url, inst.token);
-      _sessionId = null;
       _sessions = null;
     });
     _loadSessions();
   }
 
   void _openSession(String id, String title, String? profile) {
+    final client = _client;
+    final url = _active?.url;
+    if (client == null || url == null) return;
+    final existing =
+        _tabs.indexWhere((t) => t.instanceUrl == url && t.sessionId == id);
     setState(() {
-      _sessionId = id;
-      _sessionTitle = title;
-      _sessionProfile = profile;
+      if (existing >= 0) {
+        _tabs[existing].title = title;
+        _tabs[existing].profile = profile;
+        _activeIndex = existing;
+      } else {
+        _tabs.add(_ShellTab(
+            client: client,
+            instanceUrl: url,
+            sessionId: id,
+            title: title,
+            profile: profile));
+        _activeIndex = _tabs.length - 1;
+      }
     });
+    _syncPage();
   }
 
   // Full-screen on phones (QR scan); a compact natural-height dialog on
@@ -245,13 +306,15 @@ class _DesktopShellState extends State<DesktopShell> {
     if (!mounted) return;
     setState(() {
       _instances = items;
+      _tabs.removeWhere((t) => t.instanceUrl == inst.url);
+      if (_activeIndex >= _tabs.length) _activeIndex = _tabs.length - 1;
       if (_active?.url == inst.url) {
         _active = items.isNotEmpty ? items.first : null;
         _client =
             _active != null ? DaemonClient(_active!.url, _active!.token) : null;
-        _sessionId = null;
       }
     });
+    _syncPage();
   }
 
   Widget _sidebar({VoidCallback? onAfterPick}) => _Sidebar(
@@ -281,13 +344,8 @@ class _DesktopShellState extends State<DesktopShell> {
       );
 
   void _onSessionDeleted(String id) {
-    if (_sessionId == id) {
-      setState(() {
-        _sessionId = null;
-        _sessionTitle = '';
-        _sessionProfile = null;
-      });
-    }
+    final i = _tabs.indexWhere((t) => t.sessionId == id);
+    if (i >= 0) _closeTab(i);
     _loadSessions();
   }
 
@@ -367,25 +425,116 @@ class _DesktopShellState extends State<DesktopShell> {
     if (client == null) {
       return _withMenu(onMenu, _welcome());
     }
-    if (_sessionId == null) {
+    if (_tabs.isEmpty) {
       return _withMenu(onMenu, _recentPlaceholder());
     }
-    // Pane-scoped MediaQuery so window-width sizing (chat bubbles) fits the pane.
-    return LayoutBuilder(builder: (ctx, c) {
-      final mq = MediaQuery.of(ctx);
-      return MediaQuery(
-        data: mq.copyWith(size: Size(c.maxWidth, c.maxHeight)),
-        child: SessionScreen(
-          key: ValueKey('${_active!.url}|$_sessionId'),
-          client: client,
-          sessionId: _sessionId!,
-          title: _sessionTitle,
-          profile: _sessionProfile,
-          embedded: true,
-          onMenu: onMenu,
+    return Column(children: [
+      _tabStrip(onMenu),
+      Expanded(
+        // Pane-scoped MediaQuery so window-width sizing (chat bubbles) fits the pane.
+        child: LayoutBuilder(builder: (ctx, c) {
+          final mq = MediaQuery.of(ctx);
+          return MediaQuery(
+            data: mq.copyWith(size: Size(c.maxWidth, c.maxHeight)),
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: _tabs.length,
+              onPageChanged: (i) => setState(() => _activeIndex = i),
+              itemBuilder: (_, i) {
+                final t = _tabs[i];
+                return _KeepAlive(
+                  child: SessionScreen(
+                    key: ValueKey('${t.instanceUrl}|${t.sessionId}'),
+                    client: t.client,
+                    sessionId: t.sessionId,
+                    title: t.title,
+                    profile: t.profile,
+                    embedded: true,
+                    onMenu: null,
+                  ),
+                );
+              },
+            ),
+          );
+        }),
+      ),
+    ]);
+  }
+
+  Widget _tabStrip(VoidCallback? onMenu) {
+    return Container(
+      height: kMobile ? 46 : 40,
+      decoration: const BoxDecoration(
+        color: AppColors.bg,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(children: [
+        if (onMenu != null)
+          IconBtn('sidebar',
+              size: kMobile ? 44 : 38,
+              iconSize: kMobile ? 23 : 18,
+              tooltip: 'Sidebar',
+              onTap: onMenu),
+        Expanded(
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            itemCount: _tabs.length,
+            itemBuilder: (_, i) => _tabChip(i),
+          ),
         ),
-      );
-    });
+        IconBtn('plus',
+            size: kMobile ? 44 : 38,
+            iconSize: kMobile ? 21 : 17,
+            tooltip: 'New session',
+            onTap: _newSessionFlow),
+      ]),
+    );
+  }
+
+  Widget _tabChip(int i) {
+    final t = _tabs[i];
+    final active = i == _activeIndex;
+    final title = t.title.isEmpty ? '(untitled)' : t.title;
+    return GestureDetector(
+      onTap: () => _activateTab(i),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 3),
+        padding: const EdgeInsets.only(left: 11, right: 5),
+        constraints: const BoxConstraints(maxWidth: 210),
+        decoration: BoxDecoration(
+          color: active ? AppColors.surface2 : Colors.transparent,
+          borderRadius: BorderRadius.circular(R.xs),
+          border: Border.all(
+              color: active ? AppColors.border : Colors.transparent),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: active ? AppColors.accent : AppColors.fg4),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: sans(12.5, color: active ? AppColors.fg1 : AppColors.fg3)),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: () => _closeTab(i),
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.all(5),
+              child: AppIcon('x', size: 11, color: AppColors.fg4),
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 
   // No session selected → recent sessions + a New chat button (instead of a bare
@@ -524,6 +673,26 @@ class _DesktopShellState extends State<DesktopShell> {
         ),
       ),
     );
+  }
+}
+
+/// Keeps a swiped-away tab mounted so its WebSocket attach and scroll position
+/// survive switching between tabs.
+class _KeepAlive extends StatefulWidget {
+  final Widget child;
+  const _KeepAlive({required this.child});
+  @override
+  State<_KeepAlive> createState() => _KeepAliveState();
+}
+
+class _KeepAliveState extends State<_KeepAlive>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
 
