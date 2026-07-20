@@ -233,12 +233,9 @@ MarkdownStyleSheet markdownStyle(BuildContext context) {
     h1Padding: const EdgeInsets.only(top: 6, bottom: 2),
     h2: sans(18.5, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1),
     h3: sans(16.5, weight: FontWeight.w600, height: 1.3, color: AppColors.fg1),
-    // Inline `code`: mono + accent wash so it reads as code, not plain prose.
-    code: mono(13.5, color: AppColors.accent).copyWith(
-      backgroundColor: AppColors.accentBg,
-    ),
-    // No block chrome here: CodeBlockBuilder draws the container (with the copy
-    // chip) itself — a decoration here would nest a second box around it.
+    // Inline style fallback; CodeBlockBuilder draws the real pill.
+    code: mono(13.5, color: AppColors.accent),
+    // PreBlockBuilder owns fenced chrome — keep these empty to avoid a double box.
     codeblockPadding: EdgeInsets.zero,
     codeblockDecoration: const BoxDecoration(),
     blockquote: sans(15.5, height: 1.5, color: AppColors.fg2),
@@ -253,9 +250,8 @@ MarkdownStyleSheet markdownStyle(BuildContext context) {
   );
 }
 
-/// Fenced code blocks get a dedicated small copy button (top-right) and
-/// horizontal scrolling. Inline `code` gets an explicit mono + accent pill so
-/// it never falls back to plain body text when the stylesheet is ignored.
+/// Inline `code` only. Fenced blocks are handled by [PreBlockBuilder] on `pre`
+/// so we don't nest a second chrome box or paint the accent pill on whole blocks.
 class CodeBlockBuilder extends MarkdownElementBuilder {
   @override
   Widget? visitElementAfterWithContext(
@@ -263,20 +259,33 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
     final raw = element.textContent;
     final isBlock = raw.contains('\n') ||
         (element.attributes['class'] ?? '').startsWith('language-');
-    if (!isBlock) {
-      // Inline code — wrap in a pill. Prefer element text over preferredStyle
-      // alone so single-backtick spans always look like code.
-      final code = raw;
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-        decoration: BoxDecoration(
-          color: AppColors.accentBg,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(code, style: mono(13.5, color: AppColors.accent)),
-      );
+    if (isBlock) {
+      // Nested under <pre> — PreBlockBuilder owns the chrome; return plain text.
+      final code = raw.endsWith('\n') ? raw.substring(0, raw.length - 1) : raw;
+      return Text(code, style: mono(13, height: 1.5, color: AppColors.fg1));
     }
-    final code = raw.endsWith('\n') ? raw.substring(0, raw.length - 1) : raw;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: AppColors.accentBg,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(raw, style: mono(13.5, color: AppColors.accent)),
+    );
+  }
+}
+
+/// Fenced ``` blocks — full-width surface, clean border, copy chip. Registered
+/// on `pre` so flutter_markdown does not also wrap us in codeblockDecoration.
+class PreBlockBuilder extends MarkdownElementBuilder {
+  @override
+  bool isBlockElement() => true;
+
+  @override
+  Widget? visitElementAfterWithContext(
+      BuildContext context, md.Element element, TextStyle? preferredStyle, TextStyle? parentStyle) {
+    var code = element.textContent;
+    if (code.endsWith('\n')) code = code.substring(0, code.length - 1);
     return _MdCodeBlock(code: code);
   }
 }
@@ -303,36 +312,50 @@ class _MdCodeBlockState extends State<_MdCodeBlock> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.surface2,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.border2),
         borderRadius: BorderRadius.circular(R.sm),
       ),
-      child: Stack(children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(12, 12, 40, 12),
-          child: Text(widget.code, style: mono(13, height: 1.5, color: AppColors.fg1)),
-        ),
-        Positioned(
-          top: 4,
-          right: 4,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(R.xs),
-            onTap: _copy,
-            child: Container(
-              padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(
-                color: AppColors.surface3,
-                borderRadius: BorderRadius.circular(R.xs),
-              ),
-              child: AppIcon(_copied ? 'check' : 'clipboard',
-                  size: 13, color: _copied ? AppColors.ok : AppColors.fg3),
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(14, 14, 44, 14),
+            child: Text(
+              widget.code,
+              style: mono(13, height: 1.55, color: AppColors.fg1),
             ),
           ),
-        ),
-      ]),
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(R.xs),
+                onTap: _copy,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface3,
+                    borderRadius: BorderRadius.circular(R.xs),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: AppIcon(
+                    _copied ? 'check' : 'clipboard',
+                    size: 13,
+                    color: _copied ? AppColors.ok : AppColors.fg3,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -708,7 +731,7 @@ class Bubble extends StatelessWidget {
           data: shown,
           selectable: false,
           styleSheet: markdownStyle(context),
-          builders: {'code': CodeBlockBuilder()},
+          builders: {'code': CodeBlockBuilder(), 'pre': PreBlockBuilder()},
           onTapLink: (txt, href, title) => openMarkdownLink(href),
         ),
         // Copy only on agent messages.
