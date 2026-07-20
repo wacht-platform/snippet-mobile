@@ -56,8 +56,8 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   String? _currentProfile;
   final _input = TextEditingController();
   final _scroll = ScrollController();
-  // Messages sent mid-run, shown optimistically until the daemon applies them as
-  // a `steer` event (then reconciled away). Cancelled via the drop_queued input.
+  // Held while status == running — not sent until the run ends (TUI/desktop parity).
+  // Cancel drops locally only; these never hit the daemon's pending_inputs.
   final List<String> _queued = [];
   // Messages sent to the daemon but not yet echoed back as events — shown
   // optimistically (faint) so they don't vanish during the round-trip.
@@ -642,18 +642,25 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     }
   }
 
-  // Cancel everything still queued for this run (drop_queued clears the daemon's
-  // pending buffer; if some already applied, those stay as real bubbles).
-  // Held messages were never sent to the daemon yet — just drop them locally.
-  void _cancelQueued() => setState(() => _queued.clear());
+  // Held messages were never sent to the daemon — drop them locally only.
+  // (Daemon `drop_queued` is only for inputs already in pending_inputs.)
+  void _cancelQueuedAt(int i) => setState(() {
+        if (i >= 0 && i < _queued.length) _queued.removeAt(i);
+      });
 
-  // Drop queued items that the daemon has now applied (they arrive as `steer`
-  // events). FIFO match so duplicate texts reconcile in order.
-  // Display label for a held message — hide the verbose image marker.
+  // Display label for a held/pending message — strip internal attach markers
+  // (the real bubble shows icon pills; optimistic rows just show the text).
   String _queuedLabel(String m) {
-    if (m.startsWith('[attached image')) return '🖼 image';
-    final i = m.indexOf('\n\n[attached image');
-    return i >= 0 ? '${m.substring(0, i)}  🖼' : m;
+    final clean = hideAttachmentMarkers(m);
+    if (clean.isNotEmpty) return clean;
+    // Attachments-only: short plain summary, no emoji.
+    final matches = RegExp(r'\[attached (image|file) —[^\]]*\]').allMatches(m);
+    final images = matches.where((x) => x.group(1) == 'image').length;
+    final files = matches.length - images;
+    final parts = <String>[];
+    if (images > 0) parts.add(images == 1 ? '1 image' : '$images images');
+    if (files > 0) parts.add(files == 1 ? '1 file' : '$files files');
+    return parts.isEmpty ? 'attachment' : parts.join(' · ');
   }
 
   void _toast(String m) {
@@ -762,7 +769,11 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
                       if (running) ...[const SizedBox(height: 12), const _TypingDots()],
                       if (_queued.isNotEmpty) ...[
                         const SizedBox(height: 12),
-                        for (final q in _queued) _QueuedBubble(text: _queuedLabel(q), onCancel: _cancelQueued),
+                        for (var qi = 0; qi < _queued.length; qi++)
+                          _QueuedBubble(
+                            text: _queuedLabel(_queued[qi]),
+                            onCancel: () => _cancelQueuedAt(qi),
+                          ),
                       ],
                     ],
                   ),
@@ -1200,11 +1211,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     );
   }
 
-  // A single compact pill ("📎 2 attachments") instead of a row of chips. Tap to
-  // review/remove individual items; the trailing ✕ clears them all.
-  // All pending attachments side by side — image thumbnails and file chips in a
-  // horizontally scrollable row, each with its own ✕ so any single one can be
-  // removed directly (the old count-pill hid them behind a review sheet).
+  // Composer attachment row: image thumbnails + file chips, each with its own ✕.
   Widget _attachmentBar() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8, left: 2),

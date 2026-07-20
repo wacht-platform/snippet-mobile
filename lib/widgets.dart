@@ -660,33 +660,37 @@ final RegExp _attachMarkerRe = RegExp(r'\[attached (image|file) —[^\]]*\]', mu
 /// itself is surfaced separately, as a pill on the message (see [Bubble]).
 String hideAttachmentMarkers(String raw) => raw.replaceAll(_attachMarkerRe, '').trim();
 
-/// A read-only "📎 2 images · 1 file" pill shown on a sent message that carried
-/// attachments — the same shape as the composer's attachment pill.
+/// Read-only attachment summary on a sent message — icon + count, no emoji.
+/// Images and files each get their own compact pill (matches desktop).
 class _AttachmentPill extends StatelessWidget {
   final int images, files;
   const _AttachmentPill({required this.images, required this.files});
   @override
   Widget build(BuildContext context) {
-    final parts = <String>[];
-    if (images > 0) parts.add('$images image${images == 1 ? '' : 's'}');
-    if (files > 0) parts.add('$files file${files == 1 ? '' : 's'}');
-    final total = images + files;
-    final label = parts.isEmpty ? '$total attachment${total == 1 ? '' : 's'}' : parts.join(' · ');
+    Widget pill(String icon, String label) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.surface2,
+            borderRadius: BorderRadius.circular(R.card),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            AppIcon(icon, size: 13, color: AppColors.fg3),
+            const SizedBox(width: 6),
+            Text(label, style: sans(12.5, color: AppColors.fg2)),
+          ]),
+        );
+    final pills = <Widget>[];
+    if (images > 0) {
+      pills.add(pill('image', images == 1 ? 'image' : '$images images'));
+    }
+    if (files > 0) {
+      pills.add(pill('file', files == 1 ? 'file' : '$files files'));
+    }
+    if (pills.isEmpty) return const SizedBox.shrink();
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-        decoration: BoxDecoration(
-          color: AppColors.surface2,
-          borderRadius: BorderRadius.circular(R.card),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Text('📎', style: TextStyle(fontSize: 12.5)),
-          const SizedBox(width: 7),
-          Text(label, style: sans(12.5, color: AppColors.fg2)),
-        ]),
-      ),
+      child: Wrap(spacing: 8, runSpacing: 6, children: pills),
     );
   }
 }
