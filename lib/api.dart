@@ -341,6 +341,30 @@ class DaemonClient {
   Future<Map<String, dynamic>> gitCheckout(String session, String target, {bool create = false}) =>
       _gitPost('checkout', {'session': session, 'target': target, 'create': create});
 
+  Future<List<Map<String, dynamic>>> bgList(String session) async {
+    final r = await http.post(_uri('/bg'),
+        headers: _json, body: jsonEncode({'session': session}));
+    if (r.statusCode != 200) throw _err('list processes', r);
+    final j = jsonDecode(r.body) as Map<String, dynamic>;
+    final procs = (j['processes'] as List?) ?? const [];
+    return procs.map((e) => (e as Map).cast<String, dynamic>()).toList();
+  }
+
+  Future<void> bgKill(String session, String id) async {
+    final r = await http.post(_uri('/bg/kill'),
+        headers: _json, body: jsonEncode({'session': session, 'id': id}));
+    if (r.statusCode != 200) throw _err('stop process', r);
+  }
+
+  Future<String> bgLog(String session, String id, {int tail = 300}) async {
+    final r = await http.post(_uri('/bg/log'),
+        headers: _json,
+        body: jsonEncode({'session': session, 'id': id, 'tail': tail}));
+    if (r.statusCode != 200) throw _err('read log', r);
+    final j = jsonDecode(r.body) as Map<String, dynamic>;
+    return j['log'] as String? ?? '';
+  }
+
   Future<Map<String, dynamic>> gitPush(String session) => _gitPost('push', {'session': session});
 
   Future<Map<String, dynamic>> gitPull(String session) => _gitPost('pull', {'session': session});

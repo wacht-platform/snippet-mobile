@@ -18,6 +18,7 @@ import '../panel.dart';
 import '../widgets.dart';
 import 'editor.dart';
 import 'files.dart';
+import 'processes.dart';
 import 'git.dart';
 
 class SessionScreen extends StatefulWidget {
@@ -979,6 +980,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         presentScreen(context, builder: (_, close) => FileExplorer(client: widget.client, title: name, start: ws.isEmpty ? null : ws, onClose: close, onOpenFile: widget.onOpenFileTab));
       }),
       item('terminal', 'Run command', _showExec),
+      item('list', 'Processes', () => presentScreen(context, builder: (_, close) => ProcessesScreen(client: widget.client, sessionId: widget.sessionId, onClose: close))),
       const PopupMenuDivider(),
       item('minimize', 'Compact history', () {
         _send({'kind': 'compact'});
@@ -1024,6 +1026,8 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           presentScreen(context, builder: (_, close) => FileExplorer(client: widget.client, title: name, start: ws.isEmpty ? null : ws, onClose: close, onOpenFile: widget.onOpenFileTab));
         })),
         _actionTile('terminal', 'Run command', onTap: () => run(_showExec)),
+        _actionTile('list', 'Processes', onTap: () => run(() => presentScreen(context,
+            builder: (_, close) => ProcessesScreen(client: widget.client, sessionId: widget.sessionId, onClose: close)))),
         const SizedBox(height: 12),
         const SectionLabel('History'),
         _actionTile('minimize', 'Compact history', onTap: () => run(() {
