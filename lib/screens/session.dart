@@ -857,14 +857,12 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       if (_modelLabel != null) _modelLabel!,
     ];
     return Container(
-      padding: const EdgeInsets.fromLTRB(2, 4, 8, 6),
+      padding: const EdgeInsets.fromLTRB(12, 4, 8, 6),
       decoration: BoxDecoration(
         color: readingBg,
         border: const Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(children: [
-        // Back to the session list (the drawer is the mobile "menu").
-        IconBtn('chevron-left', size: 42, iconSize: 28, tooltip: 'Sessions', onTap: widget.onMenu),
         // Tapping the title area itself opens the session actions (rename, model,
         // files, git, …) — no separate ellipsis button needed.
         Expanded(
@@ -872,7 +870,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             onTap: () => _openActions(s),
             borderRadius: BorderRadius.circular(R.sm),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 Text(_title.isEmpty ? 'session' : _title,
                     maxLines: 1, overflow: TextOverflow.ellipsis,
