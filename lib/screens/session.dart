@@ -648,19 +648,14 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         if (i >= 0 && i < _queued.length) _queued.removeAt(i);
       });
 
-  // Display label for a held/pending message — strip internal attach markers
-  // (the real bubble shows icon pills; optimistic rows just show the text).
-  String _queuedLabel(String m) {
-    final clean = hideAttachmentMarkers(m);
-    if (clean.isNotEmpty) return clean;
-    // Attachments-only: short plain summary, no emoji.
+  // Clean text for a held/pending message (markers stripped). Attachments
+  // surface as AttachmentPill beside the text — same as a real Bubble.
+  String _queuedText(String m) => hideAttachmentMarkers(m);
+
+  (int images, int files) _queuedAttachCounts(String m) {
     final matches = RegExp(r'\[attached (image|file) —[^\]]*\]').allMatches(m);
     final images = matches.where((x) => x.group(1) == 'image').length;
-    final files = matches.length - images;
-    final parts = <String>[];
-    if (images > 0) parts.add(images == 1 ? '1 image' : '$images images');
-    if (files > 0) parts.add(files == 1 ? '1 file' : '$files files');
-    return parts.isEmpty ? 'attachment' : parts.join(' · ');
+    return (images, matches.length - images);
   }
 
   void _toast(String m) {
@@ -764,14 +759,17 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
                         const EmptyState(icon: 'terminal', title: 'Session ready', body: 'Send a task to get started.'),
                       ...items,
                       // Optimistic bubbles for messages sent but not yet echoed.
+                      // Pass full payload so Bubble can render attach pills.
                       for (final p in _pending)
-                        Opacity(opacity: 0.5, child: Padding(padding: const EdgeInsets.only(bottom: 12), child: Bubble(mine: true, text: _queuedLabel(p)))),
+                        Opacity(opacity: 0.5, child: Padding(padding: const EdgeInsets.only(bottom: 12), child: Bubble(mine: true, text: p))),
                       if (running) ...[const SizedBox(height: 12), const _TypingDots()],
                       if (_queued.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         for (var qi = 0; qi < _queued.length; qi++)
                           _QueuedBubble(
-                            text: _queuedLabel(_queued[qi]),
+                            text: _queuedText(_queued[qi]),
+                            images: _queuedAttachCounts(_queued[qi]).$1,
+                            files: _queuedAttachCounts(_queued[qi]).$2,
                             onCancel: () => _cancelQueuedAt(qi),
                           ),
                       ],
@@ -1817,8 +1815,15 @@ class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderState
 
 class _QueuedBubble extends StatelessWidget {
   final String text;
+  final int images;
+  final int files;
   final VoidCallback onCancel;
-  const _QueuedBubble({required this.text, required this.onCancel});
+  const _QueuedBubble({
+    required this.text,
+    required this.images,
+    required this.files,
+    required this.onCancel,
+  });
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1831,11 +1836,20 @@ class _QueuedBubble extends StatelessWidget {
           const Spacer(),
           IconBtn('x', size: 26, iconSize: 14, tooltip: 'Cancel', onTap: onCancel),
         ]),
-        const SizedBox(height: 3),
-        Padding(
-          padding: const EdgeInsets.only(left: 12),
-          child: Text(text, style: sans(13.5, height: 1.5, color: AppColors.fg3)),
-        ),
+        if (text.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Text(text, style: sans(13.5, height: 1.5, color: AppColors.fg3)),
+          ),
+        ],
+        if (images + files > 0) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: AttachmentPill(images: images, files: files),
+          ),
+        ],
       ]),
     );
   }

@@ -662,9 +662,9 @@ String hideAttachmentMarkers(String raw) => raw.replaceAll(_attachMarkerRe, '').
 
 /// Read-only attachment summary on a sent message — icon + count, no emoji.
 /// Images and files each get their own compact pill (matches desktop).
-class _AttachmentPill extends StatelessWidget {
+class AttachmentPill extends StatelessWidget {
   final int images, files;
-  const _AttachmentPill({required this.images, required this.files});
+  const AttachmentPill({super.key, required this.images, required this.files});
   @override
   Widget build(BuildContext context) {
     Widget pill(String icon, String label) => Container(
@@ -724,7 +724,7 @@ class Bubble extends StatelessWidget {
         // A sent attachment stays visible as a pill (below any text it came with).
         if (matches.isNotEmpty) ...[
           if (shown.isNotEmpty) const SizedBox(height: 8),
-          _AttachmentPill(images: images, files: files),
+          AttachmentPill(images: images, files: files),
         ],
       ] else ...[
         // selectable: false on purpose — with `true`, EVERY markdown block is its
