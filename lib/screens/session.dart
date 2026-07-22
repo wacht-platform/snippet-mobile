@@ -386,6 +386,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           }
           setState(() {
             _state = next;
+            _title = next.title ?? (next.userRequest.trim().isEmpty ? widget.title : next.userRequest);
           });
           // Re-arm (or cancel) the ack watchdog against the new _pending state.
           _armAckWatchdog();

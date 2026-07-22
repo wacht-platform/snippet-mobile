@@ -188,6 +188,7 @@ class HarnessState {
   final String status;
   final String workspace;
   final String userRequest;
+  final String? title;
   final List<Map<String, dynamic>> events;
   final String? finalText;
   final String approvalMode;
@@ -210,6 +211,7 @@ class HarnessState {
     required this.status,
     required this.workspace,
     required this.userRequest,
+    required this.title,
     required this.events,
     required this.finalText,
     required this.approvalMode,
@@ -241,6 +243,7 @@ class HarnessState {
       status: j['status'] as String? ?? 'idle',
       workspace: j['workspace'] as String? ?? '',
       userRequest: j['user_request'] as String? ?? '',
+      title: j['title'] as String?,
       events: ((j['events'] as List?) ?? const [])
           .map((e) => (e as Map).cast<String, dynamic>())
           .toList(),
@@ -280,6 +283,7 @@ class HarnessState {
       status: base.status,
       workspace: base.workspace,
       userRequest: base.userRequest,
+      title: d.containsKey('title') ? base.title : title,
       events: [...events, ...added],
       finalText: base.finalText,
       approvalMode: base.approvalMode,
