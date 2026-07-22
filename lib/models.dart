@@ -311,14 +311,29 @@ class LaneInfo {
   final String title;
   final String status; // running | completed | failed
   final String startedAt;
+  final String? handoff;
   final String? summary;
-  LaneInfo({required this.id, required this.title, required this.status, required this.startedAt, this.summary});
+  final String? report;
+  final String? error;
+  LaneInfo({
+    required this.id,
+    required this.title,
+    required this.status,
+    required this.startedAt,
+    this.handoff,
+    this.summary,
+    this.report,
+    this.error,
+  });
   factory LaneInfo.fromJson(Map<String, dynamic> j) => LaneInfo(
         id: j['id'] as String? ?? '',
         title: j['title'] as String? ?? '',
         status: j['status'] as String? ?? '',
         startedAt: j['started_at'] as String? ?? '',
+        handoff: j['handoff'] as String?,
         summary: j['summary'] as String?,
+        report: j['report'] as String?,
+        error: j['error'] as String?,
       );
   bool get running => status == 'running';
 }

@@ -287,7 +287,6 @@ class LaneCard extends StatefulWidget {
 
 class _LaneCardState extends State<LaneCard> {
   Timer? _tick;
-  bool _open = false;
 
   @override
   void initState() {
@@ -317,12 +316,46 @@ class _LaneCardState extends State<LaneCard> {
     return '${d.inHours}h ${d.inMinutes % 60}m';
   }
 
+  void _showDetails(BuildContext context, LaneInfo? lane) {
+    final handoff = lane?.handoff;
+    final report = lane?.report;
+    final summary = widget.summary ?? lane?.summary;
+    final error = lane?.error;
+    if ([handoff, report, summary, error].every((s) => s == null || s.trim().isEmpty)) return;
+
+    Widget section(String heading, String? text, {bool errorTone = false}) {
+      if (text == null || text.trim().isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(heading,
+              style: mono(11, weight: FontWeight.w600,
+                  color: errorTone ? AppColors.danger : AppColors.fg3)),
+          const SizedBox(height: 6),
+          SelectableText(text,
+              style: sans(12.5, height: 1.5,
+                  color: errorTone ? AppColors.danger : AppColors.fg1)),
+        ]),
+      );
+    }
+
+    showAppSheet(context,
+        title: 'Delegated thread · ${widget.title}',
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          section('HANDOFF', handoff),
+          section('RESULT', report ?? summary),
+          section('ERROR', error, errorTone: true),
+        ]));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = widget.live();
     final running = l?.running ?? false;
     final failed = (l?.status ?? '') == 'failed';
     final summary = widget.summary ?? l?.summary;
+    final hasDetails = [l?.handoff, l?.report, summary, l?.error]
+        .any((s) => s != null && s.trim().isNotEmpty);
     final dot = running
         ? AppColors.accent
         : failed
@@ -337,7 +370,7 @@ class _LaneCardState extends State<LaneCard> {
         border: Border.all(color: running ? AppColors.accentLine : AppColors.border),
       ),
       child: InkWell(
-        onTap: summary == null ? null : () => setState(() => _open = !_open),
+        onTap: hasDetails ? () => _showDetails(context, l) : null,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
@@ -347,6 +380,10 @@ class _LaneCardState extends State<LaneCard> {
                   maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: sans(13, weight: FontWeight.w600, color: AppColors.fg1)),
             ),
+            if (hasDetails) ...[
+              const SizedBox(width: 6),
+              const AppIcon('chevron-right', size: 14, color: AppColors.fg4),
+            ],
             const SizedBox(width: 8),
             Text(
               running
@@ -360,7 +397,7 @@ class _LaneCardState extends State<LaneCard> {
           if (summary != null && summary.trim().isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(summary,
-                maxLines: _open ? 200 : 2,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: sans(12, height: 1.45, color: AppColors.fg3)),
           ],
