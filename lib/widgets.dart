@@ -246,6 +246,10 @@ MarkdownStyleSheet markdownStyle(BuildContext context) {
     ),
     listBullet: sans(16, height: 1.5, color: AppColors.fg1),
     tableBody: sans(14, color: AppColors.fg1),
+    // FlexColumnWidth stretches every markdown table to the full message width.
+    // Intrinsic columns keep phone tables content-sized; the markdown package
+    // supplies horizontal scrolling when a long URL or code value needs it.
+    tableColumnWidth: kMobile ? const IntrinsicColumnWidth() : const FlexColumnWidth(),
     horizontalRuleDecoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
   );
 }
@@ -311,50 +315,52 @@ class _MdCodeBlockState extends State<_MdCodeBlock> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: AppColors.surface2,
-        border: Border.all(color: AppColors.border2),
-        borderRadius: BorderRadius.circular(R.sm),
-      ),
-      child: Stack(
-        children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(14, 14, 44, 14),
-            child: Text(
-              widget.code,
-              style: mono(13, height: 1.55, color: AppColors.fg1),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: AppColors.surface2,
+          border: Border.all(color: AppColors.border2),
+          borderRadius: BorderRadius.circular(R.sm),
+        ),
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(14, 14, 44, 14),
+              child: Text(
+                widget.code,
+                style: mono(13, height: 1.55, color: AppColors.fg1),
+              ),
             ),
-          ),
-          Positioned(
-            top: 6,
-            right: 6,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(R.xs),
-                onTap: _copy,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface3,
-                    borderRadius: BorderRadius.circular(R.xs),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: AppIcon(
-                    _copied ? 'check' : 'clipboard',
-                    size: 13,
-                    color: _copied ? AppColors.ok : AppColors.fg3,
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(R.xs),
+                  onTap: _copy,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface3,
+                      borderRadius: BorderRadius.circular(R.xs),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: AppIcon(
+                      _copied ? 'check' : 'clipboard',
+                      size: 13,
+                      color: _copied ? AppColors.ok : AppColors.fg3,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
