@@ -66,7 +66,9 @@ class _DesktopShellState extends State<DesktopShell> {
   final ScrollController _stripController = ScrollController();
   final Map<String, GlobalKey> _chipKeys = {};
   _ShellTab? get _activeTab =>
-      (_activeIndex >= 0 && _activeIndex < _tabs.length) ? _tabs[_activeIndex] : null;
+      (_activeIndex >= 0 && _activeIndex < _tabs.length)
+          ? _tabs[_activeIndex]
+          : null;
   String? get _sessionId => _activeTab?.sessionId;
   bool _loading = true;
   // Session list lives here (not in the sidebar) so it survives drawer open/close
@@ -128,6 +130,62 @@ class _DesktopShellState extends State<DesktopShell> {
     }
   }
 
+  void _persistTabs() {
+    _store.saveOpenTabs(
+      _tabs
+          .map((t) => OpenTabDescriptor(
+                instanceUrl: t.instanceUrl,
+                sessionId: t.sessionId,
+                filePath: t.filePath,
+                title: t.title,
+                profile: t.profile,
+              ))
+          .toList(),
+      _activeIndex,
+    );
+  }
+
+  Future<void> _restoreTabs(List<Instance> instances) async {
+    final saved = await _store.loadOpenTabs();
+    if (!mounted || saved.tabs.isEmpty) return;
+    final byUrl = {for (final inst in instances) inst.url: inst};
+    final restored = <_ShellTab>[];
+    for (final descriptor in saved.tabs) {
+      final inst = byUrl[descriptor.instanceUrl];
+      if (inst == null) continue;
+      final client = DaemonClient(inst.url, inst.token);
+      if (descriptor.isFile) {
+        restored.add(_ShellTab.file(
+          client: client,
+          instanceUrl: inst.url,
+          filePath: descriptor.filePath!,
+          title: descriptor.title,
+        ));
+      } else if (descriptor.sessionId != null) {
+        restored.add(_ShellTab.session(
+          client: client,
+          instanceUrl: inst.url,
+          sessionId: descriptor.sessionId,
+          title: descriptor.title,
+          profile: descriptor.profile,
+        ));
+      }
+    }
+    if (!mounted || restored.isEmpty) return;
+    setState(() {
+      _tabs
+        ..clear()
+        ..addAll(restored);
+      _activeIndex = saved.activeIndex.clamp(0, restored.length - 1);
+      final active = _tabs[_activeIndex];
+      _active = byUrl[active.instanceUrl];
+      _client =
+          _active == null ? null : DaemonClient(_active!.url, _active!.token);
+    });
+    _persistTabs();
+    _syncPage();
+  }
+
   void _closeOthers(int keep) {
     if (keep < 0 || keep >= _tabs.length) return;
     final kept = _tabs[keep];
@@ -137,6 +195,7 @@ class _DesktopShellState extends State<DesktopShell> {
         ..add(kept);
       _activeIndex = 0;
     });
+    _persistTabs();
     _syncPage();
   }
 
@@ -145,6 +204,7 @@ class _DesktopShellState extends State<DesktopShell> {
       _tabs.clear();
       _activeIndex = -1;
     });
+    _persistTabs();
   }
 
   void _tabMenu(int i) {
@@ -174,7 +234,8 @@ class _DesktopShellState extends State<DesktopShell> {
           const Divider(height: 1, color: AppColors.border),
           _tabMenuItem(ctx, 'x', 'Close tab', () => _closeTab(i)),
           if (_tabs.length > 1)
-            _tabMenuItem(ctx, 'copy', 'Close other tabs', () => _closeOthers(i)),
+            _tabMenuItem(
+                ctx, 'copy', 'Close other tabs', () => _closeOthers(i)),
           if (_tabs.length > 1)
             _tabMenuItem(ctx, 'trash', 'Close all tabs', _closeAllTabs,
                 danger: true),
@@ -183,8 +244,8 @@ class _DesktopShellState extends State<DesktopShell> {
     );
   }
 
-  Widget _tabMenuItem(BuildContext ctx, String icon, String label,
-      VoidCallback onTap,
+  Widget _tabMenuItem(
+      BuildContext ctx, String icon, String label, VoidCallback onTap,
       {bool danger = false}) {
     final color = danger ? AppColors.danger : AppColors.fg1;
     return InkWell(
@@ -214,11 +275,17 @@ class _DesktopShellState extends State<DesktopShell> {
         _activeIndex--;
       }
     });
+    _persistTabs();
     _syncPage();
   }
 
   void _activateTab(int i) {
+    // PageView keeps each session mounted. Remove focus from the old composer
+    // before changing pages so the platform text-input client cannot remain
+    // attached to the previous session after a swipe or tab tap.
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _activeIndex = i);
+    _persistTabs();
     _syncPage();
   }
 
@@ -267,6 +334,7 @@ class _DesktopShellState extends State<DesktopShell> {
           _active != null ? DaemonClient(_active!.url, _active!.token) : null;
       _loading = false;
     });
+    await _restoreTabs(items);
     _loadSessions();
     _refreshHealth();
   }
@@ -303,7 +371,8 @@ class _DesktopShellState extends State<DesktopShell> {
       if (identical(c, _client) && mounted) {
         setState(() {
           _sessionsLoading = false;
-          _sessionsError = 'Can\'t reach this machine — check the daemon/tunnel.';
+          _sessionsError =
+              'Can\'t reach this machine — check the daemon/tunnel.';
         });
       }
     }
@@ -379,6 +448,7 @@ class _DesktopShellState extends State<DesktopShell> {
         _activeIndex = _tabs.length - 1;
       }
     });
+    _persistTabs();
     _syncPage();
   }
 
@@ -561,6 +631,13 @@ class _DesktopShellState extends State<DesktopShell> {
             data: mq.copyWith(size: Size(c.maxWidth, c.maxHeight)),
             child: NotificationListener<ScrollNotification>(
               onNotification: (notification) {
+                // Disconnect the old session's TextField as soon as a horizontal
+                // page swipe starts. Waiting for onPageChanged leaves the old
+                // field as the platform text-input client during the gesture.
+                if (notification is ScrollStartNotification &&
+                    notification.metrics.axis == Axis.horizontal) {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                }
                 if (onMenu != null && _activeIndex == 0) {
                   if (notification is OverscrollNotification &&
                       notification.overscroll < -6.0) {
@@ -577,7 +654,13 @@ class _DesktopShellState extends State<DesktopShell> {
                 controller: _pageController,
                 itemCount: _tabs.length,
                 onPageChanged: (i) {
+                  // PageView keeps each session mounted. Remove focus from the
+                  // old composer before changing the active page so the platform
+                  // text-input client cannot remain attached to the previous
+                  // session after a swipe.
+                  FocusManager.instance.primaryFocus?.unfocus();
                   setState(() => _activeIndex = i);
+                  _persistTabs();
                   _scrollStripToActive();
                 },
                 itemBuilder: (_, i) {
@@ -656,15 +739,14 @@ class _DesktopShellState extends State<DesktopShell> {
       onLongPress: () => _tabMenu(i),
       child: Container(
         key: key,
-        margin: EdgeInsets.symmetric(
-            vertical: kMobile ? 7 : 6, horizontal: 3),
+        margin: EdgeInsets.symmetric(vertical: kMobile ? 7 : 6, horizontal: 3),
         padding: EdgeInsets.only(left: kMobile ? 13 : 11, right: 5),
         constraints: const BoxConstraints(maxWidth: 210),
         decoration: BoxDecoration(
           color: active ? AppColors.surface2 : Colors.transparent,
           borderRadius: BorderRadius.circular(R.xs),
-          border: Border.all(
-              color: active ? AppColors.border : Colors.transparent),
+          border:
+              Border.all(color: active ? AppColors.border : Colors.transparent),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (t.isFile)
@@ -683,7 +765,8 @@ class _DesktopShellState extends State<DesktopShell> {
             child: Text(title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: sans(12.5, color: active ? AppColors.fg1 : AppColors.fg3)),
+                style:
+                    sans(12.5, color: active ? AppColors.fg1 : AppColors.fg3)),
           ),
           const SizedBox(width: 4),
           GestureDetector(
@@ -707,65 +790,66 @@ class _DesktopShellState extends State<DesktopShell> {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: ConstrainedBox(
-        // Clamp the block so recent sessions stay a bounded, centered preview
-        // with breathing room top/bottom instead of filling a small viewport;
-        // the list scrolls within when there are more than fit.
-        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 520),
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.symmetric(vertical: 24),
-          children: [
-            Text('Recent sessions', style: display(24)),
-            const SizedBox(height: 6),
-            Text('Pick up where you left off, or start a new chat from Browse.',
-                style: sans(12.5, height: 1.4, color: AppColors.fg3)),
-            const SizedBox(height: 18),
-            if (_sessionsLoading && _sessions == null)
-              const Center(
-                  child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: AppColors.fg3))))
-            else if (sessions.isEmpty)
-              Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text('No sessions yet.',
-                      style: sans(12.5, color: AppColors.fg4)))
-            else
-              ...sessions.map((s) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: AppCard(
-                      onTap: () => _openSession(s.id, s.title, s.profile),
-                      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-                      child: Row(children: [
-                        Expanded(
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(s.title.isEmpty ? '(untitled)' : s.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: sans(13.5, color: AppColors.fg1)),
-                                const SizedBox(height: 3),
-                                Text(
-                                    lastPathSegment(s.folder,
-                                        ifEmpty: s.folder),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: mono(10.5, color: AppColors.fg4)),
-                              ]),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(relativeTime(s.lastActive),
-                            style: mono(10, color: AppColors.fg4)),
-                      ]),
-                    ),
-                  )),
-          ],
-        ),
+          // Clamp the block so recent sessions stay a bounded, centered preview
+          // with breathing room top/bottom instead of filling a small viewport;
+          // the list scrolls within when there are more than fit.
+          constraints: const BoxConstraints(maxWidth: 520, maxHeight: 520),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            children: [
+              Text('Recent sessions', style: display(24)),
+              const SizedBox(height: 6),
+              Text(
+                  'Pick up where you left off, or start a new chat from Browse.',
+                  style: sans(12.5, height: 1.4, color: AppColors.fg3)),
+              const SizedBox(height: 18),
+              if (_sessionsLoading && _sessions == null)
+                const Center(
+                    child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AppColors.fg3))))
+              else if (sessions.isEmpty)
+                Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text('No sessions yet.',
+                        style: sans(12.5, color: AppColors.fg4)))
+              else
+                ...sessions.map((s) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: AppCard(
+                        onTap: () => _openSession(s.id, s.title, s.profile),
+                        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                        child: Row(children: [
+                          Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(s.title.isEmpty ? '(untitled)' : s.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: sans(13.5, color: AppColors.fg1)),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                      lastPathSegment(s.folder,
+                                          ifEmpty: s.folder),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: mono(10.5, color: AppColors.fg4)),
+                                ]),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(relativeTime(s.lastActive),
+                              style: mono(10, color: AppColors.fg4)),
+                        ]),
+                      ),
+                    )),
+            ],
+          ),
         ),
       ),
     );
@@ -792,46 +876,46 @@ class _DesktopShellState extends State<DesktopShell> {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28),
         child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                      color: AppColors.surface2,
-                      borderRadius: BorderRadius.circular(R.card),
-                      border: Border.all(color: AppColors.border)),
-                  child: const AppIcon('cpu', size: 24, color: AppColors.fg3),
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                        color: AppColors.surface2,
+                        borderRadius: BorderRadius.circular(R.card),
+                        border: Border.all(color: AppColors.border)),
+                    child: const AppIcon('cpu', size: 24, color: AppColors.fg3),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              Text('No instance connected',
+                const SizedBox(height: 18),
+                Text('No instance connected',
+                    textAlign: TextAlign.center,
+                    style: sans(15.5, color: AppColors.fg1)),
+                const SizedBox(height: 8),
+                Text.rich(
+                  TextSpan(
+                      style: sans(12.5, height: 1.5, color: AppColors.fg3),
+                      children: [
+                        const TextSpan(text: 'Run '),
+                        TextSpan(
+                            text: 'snippet serve',
+                            style: mono(12, color: AppColors.fg2)),
+                        const TextSpan(
+                            text:
+                                ' on a machine, then paste the connection string it prints.'),
+                      ]),
                   textAlign: TextAlign.center,
-                  style: sans(15.5, color: AppColors.fg1)),
-              const SizedBox(height: 8),
-              Text.rich(
-                TextSpan(
-                    style: sans(12.5, height: 1.5, color: AppColors.fg3),
-                    children: [
-                      const TextSpan(text: 'Run '),
-                      TextSpan(
-                          text: 'snippet serve',
-                          style: mono(12, color: AppColors.fg2)),
-                      const TextSpan(
-                          text:
-                              ' on a machine, then paste the connection string it prints.'),
-                    ]),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 22),
-              Center(
-                  child: PillBtn('Add machine',
-                      icon: 'plus', onTap: _addInstanceFlow)),
-            ]),
+                ),
+                const SizedBox(height: 22),
+                Center(
+                    child: PillBtn('Add machine',
+                        icon: 'plus', onTap: _addInstanceFlow)),
+              ]),
         ),
       ),
     );
@@ -1080,7 +1164,8 @@ class _SidebarState extends State<_Sidebar> {
                   const SizedBox(height: 12),
                   TextButton(
                       onPressed: widget.onRefreshSessions,
-                      child: Text('Retry', style: sans(12.5, color: AppColors.accent))),
+                      child: Text('Retry',
+                          style: sans(12.5, color: AppColors.accent))),
                 ])));
       }
       return Center(
@@ -1112,8 +1197,7 @@ class _SidebarState extends State<_Sidebar> {
       }
       children.add(kMobile
           ? Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _sessionCard(s))
+              padding: const EdgeInsets.only(bottom: 8), child: _sessionCard(s))
           : Padding(
               padding: const EdgeInsets.only(bottom: 1),
               child: _sessionRow(s)));

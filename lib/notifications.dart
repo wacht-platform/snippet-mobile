@@ -19,31 +19,139 @@ const _prefEnabled = 'notif_enabled';
 
 int _downloadNotifId = 7000;
 
-/// Show a native "download complete" notification; tapping it opens the file.
-Future<void> notifyDownload(String name, String filePath) async {
-  if (!kCanNotify) return;
-  await _mainNotif.show(
-    id: _downloadNotifId++ & 0x7fffffff,
-    title: 'Download complete',
-    body: name,
-    notificationDetails: const NotificationDetails(
-      android: AndroidNotificationDetails(
-        _downloadChannel,
-        'Downloads',
-        channelDescription: 'Files saved from a session',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
-      ),
-      macOS: DarwinNotificationDetails(),
-    ),
-    payload: jsonEncode({'type': 'download', 'path': filePath}),
+// The download stream reports progress synchronously, but each native
+// notification update is asynchronous. Serialize updates so a final
+// "complete" or "failed" state cannot be overwritten by a late progress
+// update for the same notification id.
+Future<void> _downloadNotifQueue = Future<void>.value();
+
+Future<T> _enqueueDownloadNotification<T>(Future<T> Function() action) {
+  final next = _downloadNotifQueue.then((_) => action());
+  // Keep the queue usable after a platform notification error while still
+  // returning that error to the current caller.
+  _downloadNotifQueue = next.then<void>(
+    (_) {},
+    onError: (Object error, StackTrace stack) {},
   );
+  return next;
+}
+
+Future<void> _ensureDownloadPermission() async {
+  if (!kMobile) return;
+  final android = _mainNotif.resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>();
+  try {
+    await android?.requestNotificationsPermission();
+  } catch (_) {}
+}
+
+/// Start a native download-progress notification. Returns its stable id.
+Future<int?> notifyDownloadStarted(String name) async {
+  if (!kCanNotify || !kMobile) return null;
+  await _ensureDownloadPermission();
+  final id = _downloadNotifId++ & 0x7fffffff;
+  await _enqueueDownloadNotification(() => _mainNotif.show(
+        id: id,
+        title: 'Downloading',
+        body: name,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _downloadChannel,
+            'Downloads',
+            channelDescription: 'Files saved from a session',
+            importance: Importance.low,
+            priority: Priority.low,
+            onlyAlertOnce: true,
+            ongoing: true,
+            showProgress: true,
+            maxProgress: 100,
+            progress: 0,
+          ),
+        ),
+        payload: jsonEncode({'type': 'download_progress', 'name': name}),
+      ));
+  return id;
+}
+
+Future<void> notifyDownloadProgress(int? id, String name, int progress) async {
+  if (id == null || !kCanNotify || !kMobile) return;
+  await _enqueueDownloadNotification(() => _mainNotif.show(
+        id: id,
+        title: 'Downloading',
+        body: '$name · $progress%',
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _downloadChannel,
+            'Downloads',
+            channelDescription: 'Files saved from a session',
+            importance: Importance.low,
+            priority: Priority.low,
+            onlyAlertOnce: true,
+            ongoing: true,
+            showProgress: true,
+            maxProgress: 100,
+            progress: progress,
+          ),
+        ),
+      ));
+}
+
+Future<void> notifyDownloadFailure(int? id, String name, Object error) async {
+  if (id == null || !kCanNotify || !kMobile) return;
+  await _enqueueDownloadNotification(() async {
+    await _mainNotif.cancel(id: id);
+    await _mainNotif.show(
+      id: id,
+      title: 'Download failed',
+      body: '$name: $error',
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _downloadChannel,
+          'Downloads',
+          channelDescription: 'Files saved from a session',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          onlyAlertOnce: true,
+          ongoing: false,
+          showProgress: false,
+        ),
+      ),
+    );
+  });
+}
+
+/// Show a native "download complete" notification; tapping it opens the file.
+Future<void> notifyDownload(String name, String filePath, {int? id}) async {
+  if (!kCanNotify) return;
+  await _enqueueDownloadNotification(() async {
+    if (id != null) await _mainNotif.cancel(id: id);
+    await _mainNotif.show(
+      id: id ?? (_downloadNotifId++ & 0x7fffffff),
+      title: 'Download complete',
+      body: name,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _downloadChannel,
+          'Downloads',
+          channelDescription: 'Files saved from a session',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          onlyAlertOnce: true,
+          ongoing: false,
+          showProgress: false,
+        ),
+        macOS: DarwinNotificationDetails(),
+      ),
+      payload: jsonEncode({'type': 'download', 'path': filePath}),
+    );
+  });
 }
 
 /// Routed from a tapped notification (set by main with a navigator).
 void Function(Map<String, dynamic> payload)? onNotifTap;
 
-final FlutterLocalNotificationsPlugin _mainNotif = FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin _mainNotif =
+    FlutterLocalNotificationsPlugin();
 
 /// Build the device-wide events WebSocket URI for an instance.
 Uri eventsUri(String baseUrl, String token) {
@@ -82,7 +190,8 @@ Future<void> initNotifications() async {
     );
 
     await _mainNotif.initialize(
-      settings: const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
+      settings: const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher')),
       onDidReceiveNotificationResponse: (resp) {
         final p = resp.payload;
         if (p != null) _route(p);
@@ -103,7 +212,10 @@ Future<void> initNotifications() async {
   if (!kDesktopNotify) return;
   await _mainNotif.initialize(
     settings: const InitializationSettings(
-      macOS: DarwinInitializationSettings(requestAlertPermission: false, requestBadgePermission: false, requestSoundPermission: false),
+      macOS: DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false),
       linux: LinuxInitializationSettings(defaultActionName: 'Open'),
     ),
     onDidReceiveNotificationResponse: (resp) {
@@ -115,7 +227,8 @@ Future<void> initNotifications() async {
 
 /// Head/body/payload for a /events frame — shared by the mobile task handler and
 /// the desktop watcher so they stay in sync.
-({String head, String body, String payload}) _notifContent(Instance inst, Map<String, dynamic> e) {
+({String head, String body, String payload}) _notifContent(
+    Instance inst, Map<String, dynamic> e) {
   final session = e['session']?.toString() ?? '';
   final title = e['title']?.toString() ?? 'session';
   final (String head, String body) = switch (e['kind']?.toString()) {
@@ -127,7 +240,12 @@ Future<void> initNotifications() async {
   };
   // No token in the payload: the OS persists notification records and exposes
   // them to listeners — the tap handler re-resolves the token from the store.
-  final payload = jsonEncode({'url': inst.url, 'name': inst.label, 'session': session, 'title': title});
+  final payload = jsonEncode({
+    'url': inst.url,
+    'name': inst.label,
+    'session': session,
+    'title': title
+  });
   return (head: head, body: body, payload: payload);
 }
 
@@ -195,7 +313,8 @@ Future<String?> startWatching() async {
   }
   if (!kDesktopNotify) return 'Notifications are not supported here.';
   // macOS asks for permission the first time; Linux needs none.
-  final mac = _mainNotif.resolvePlatformSpecificImplementation<MacOSFlutterLocalNotificationsPlugin>();
+  final mac = _mainNotif.resolvePlatformSpecificImplementation<
+      MacOSFlutterLocalNotificationsPlugin>();
   if (mac != null) {
     final ok = await mac.requestPermissions(alert: true, sound: true);
     if (ok == false) return 'Notification permission denied.';
@@ -330,7 +449,8 @@ class _DesktopWatcher {
 // Task isolate: hold one /events WS per instance, raise local notifications.
 // ---------------------------------------------------------------------------
 @pragma('vm:entry-point')
-void startNotificationCallback() => FlutterForegroundTask.setTaskHandler(_NotifTaskHandler());
+void startNotificationCallback() =>
+    FlutterForegroundTask.setTaskHandler(_NotifTaskHandler());
 
 class _NotifTaskHandler extends TaskHandler {
   final _notif = FlutterLocalNotificationsPlugin();
@@ -343,7 +463,8 @@ class _NotifTaskHandler extends TaskHandler {
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await _notif.initialize(
-      settings: const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
+      settings: const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher')),
     );
     _instances = await InstanceStore().load();
     _connectAll();

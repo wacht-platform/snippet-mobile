@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -71,17 +72,21 @@ class DaemonClient {
   /// agent can then view with read_image).
   /// Upload [bytes]. With [dir] set, saves into that directory under [name]
   /// (file-explorer upload); otherwise a temp path (chat attachment).
-  Future<String> uploadFile(List<int> bytes, {String? name, String? dir}) async {
+  Future<String> uploadFile(List<int> bytes,
+      {String? name, String? dir}) async {
     final body = <String, dynamic>{'data_base64': base64Encode(bytes)};
     if (name != null && name.isNotEmpty) body['name'] = name;
     if (dir != null && dir.isNotEmpty) body['dir'] = dir;
-    final r = await http.post(_uri('/fs/upload'), headers: _json, body: jsonEncode(body));
+    final r = await http.post(_uri('/fs/upload'),
+        headers: _json, body: jsonEncode(body));
     if (r.statusCode != 200) throw _err('upload', r);
     return (jsonDecode(r.body) as Map<String, dynamic>)['path'] as String;
   }
 
   Future<String> openSession(String folder,
-      {bool resume = true, String? profile, bool newConversation = false}) async {
+      {bool resume = true,
+      String? profile,
+      bool newConversation = false}) async {
     final body = <String, dynamic>{'folder': folder, 'resume': resume};
     if (newConversation) body['new_conversation'] = true;
     if (profile != null && profile.isNotEmpty) body['profile'] = profile;
@@ -136,7 +141,8 @@ class DaemonClient {
       body['reasoning_effort'] = reasoningEffort;
     }
     if (supportsImages != null) body['supports_images'] = supportsImages;
-    if (contextWindow != null && contextWindow > 0) body['context_window'] = contextWindow;
+    if (contextWindow != null && contextWindow > 0)
+      body['context_window'] = contextWindow;
     if (stream != null) body['stream'] = stream;
     final r = await http.put(_uri('/config/profile'),
         headers: _json, body: jsonEncode(body));
@@ -163,7 +169,8 @@ class DaemonClient {
     final r = await http.post(_uri('/provider/models'),
         headers: _json, body: jsonEncode(body));
     if (r.statusCode != 200) throw _err('list models', r);
-    return ((jsonDecode(r.body) as Map<String, dynamic>)['models'] as List? ?? const [])
+    return ((jsonDecode(r.body) as Map<String, dynamic>)['models'] as List? ??
+            const [])
         .map((e) => CatalogModel.fromJson(e as Map<String, dynamic>))
         .toList();
   }
@@ -172,11 +179,14 @@ class DaemonClient {
   Future<List<String>> vaultList() async {
     final r = await http.get(_uri('/vault'));
     if (r.statusCode != 200) throw _err('vault', r);
-    return ((jsonDecode(r.body) as Map<String, dynamic>)['names'] as List? ?? const []).cast<String>();
+    return ((jsonDecode(r.body) as Map<String, dynamic>)['names'] as List? ??
+            const [])
+        .cast<String>();
   }
 
   Future<void> vaultSet(String name, String value) async {
-    final r = await http.put(_uri('/vault'), headers: _json, body: jsonEncode({'name': name, 'value': value}));
+    final r = await http.put(_uri('/vault'),
+        headers: _json, body: jsonEncode({'name': name, 'value': value}));
     if (r.statusCode != 200) throw _err('vault set', r);
   }
 
@@ -191,7 +201,10 @@ class DaemonClient {
     final r = await http.post(_uri('/xai/login'), headers: _json);
     if (r.statusCode != 200) throw _err('xai login', r);
     final j = jsonDecode(r.body) as Map<String, dynamic>;
-    return (userCode: j['user_code'] as String, verificationUri: j['verification_uri'] as String);
+    return (
+      userCode: j['user_code'] as String,
+      verificationUri: j['verification_uri'] as String
+    );
   }
 
   Future<bool> xaiSignedIn() async {
@@ -239,7 +252,8 @@ class DaemonClient {
 
   Future<void> renameSession(String sessionId, String title) async {
     final r = await http.post(_uri('/session/rename'),
-        headers: _json, body: jsonEncode({'session': sessionId, 'title': title}));
+        headers: _json,
+        body: jsonEncode({'session': sessionId, 'title': title}));
     if (r.statusCode != 200) throw _err('rename session', r);
   }
 
@@ -254,13 +268,15 @@ class DaemonClient {
   /// Atomic write with optimistic concurrency. Returns the daemon's JSON:
   /// {ok, hash, size} on success, or {ok:false, conflict:true, error} (HTTP 409)
   /// when the file changed on disk since [prevHash] was read.
-  Future<Map<String, dynamic>> writeFile(String path, String content, {String? prevHash}) async {
+  Future<Map<String, dynamic>> writeFile(String path, String content,
+      {String? prevHash}) async {
     final body = <String, dynamic>{
       'path': path,
       'content': content,
       if (prevHash != null) 'prev_hash': prevHash,
     };
-    final r = await http.post(_uri('/fs/write'), headers: _json, body: jsonEncode(body));
+    final r = await http.post(_uri('/fs/write'),
+        headers: _json, body: jsonEncode(body));
     if (r.statusCode == 200 || r.statusCode == 409) {
       return jsonDecode(r.body) as Map<String, dynamic>;
     }
@@ -269,13 +285,15 @@ class DaemonClient {
 
   /// Create a new directory at [path]. Throws on conflict/error.
   Future<void> mkdir(String path) async {
-    final r = await http.post(_uri('/fs/mkdir'), headers: _json, body: jsonEncode({'path': path}));
+    final r = await http.post(_uri('/fs/mkdir'),
+        headers: _json, body: jsonEncode({'path': path}));
     if (r.statusCode != 200) throw _err('create folder', r);
   }
 
   /// Delete a file or directory (directories are removed recursively).
   Future<void> deletePath(String path) async {
-    final r = await http.post(_uri('/fs/delete'), headers: _json, body: jsonEncode({'path': path}));
+    final r = await http.post(_uri('/fs/delete'),
+        headers: _json, body: jsonEncode({'path': path}));
     if (r.statusCode != 200) throw _err('delete', r);
   }
 
@@ -283,7 +301,50 @@ class DaemonClient {
   /// Absolute URL (with the auth token) for streaming or displaying a file —
   /// used by Image.network and the video player. The daemon serves a real
   /// content-type and honors Range requests, so media streams/seeks.
-  String fileUrl(String path) => _uri('/fs/download', {'path': path}).toString();
+  String fileUrl(String path) =>
+      _uri('/fs/download', {'path': path}).toString();
+
+  /// Stream a file to [output] without buffering the whole response in memory.
+  /// [onProgress] receives bytes received and the optional content length.
+  Future<File> downloadToFile(
+    String path,
+    File output, {
+    void Function(int received, int? total)? onProgress,
+  }) async {
+    final httpClient = http.Client();
+    try {
+      final request = http.Request('GET', _uri('/fs/download', {'path': path}));
+      final response =
+          await httpClient.send(request).timeout(const Duration(minutes: 5));
+      if (response.statusCode != 200) {
+        final body = await response.stream.bytesToString();
+        throw Exception(
+            'Failed to download (HTTP ${response.statusCode})${body.isNotEmpty ? ': $body' : ''}');
+      }
+      await output.parent.create(recursive: true);
+      final sink = output.openWrite();
+      var received = 0;
+      try {
+        await for (final chunk
+            in response.stream.timeout(const Duration(minutes: 5))) {
+          sink.add(chunk);
+          received += chunk.length;
+          onProgress?.call(received, response.contentLength);
+        }
+        await sink.flush();
+      } finally {
+        await sink.close();
+      }
+      return output;
+    } catch (_) {
+      try {
+        if (await output.exists()) await output.delete();
+      } catch (_) {}
+      rethrow;
+    } finally {
+      httpClient.close();
+    }
+  }
 
   Future<Uint8List> downloadFile(String path) async {
     final r = await http.get(_uri('/fs/download', {'path': path}));
@@ -293,8 +354,10 @@ class DaemonClient {
 
   // ---- git (server-side, scoped to a session's workspace) ----
 
-  Future<Map<String, dynamic>> _gitPost(String op, Map<String, dynamic> body) async {
-    final r = await http.post(_uri('/git/$op'), headers: _json, body: jsonEncode(body));
+  Future<Map<String, dynamic>> _gitPost(
+      String op, Map<String, dynamic> body) async {
+    final r = await http.post(_uri('/git/$op'),
+        headers: _json, body: jsonEncode(body));
     if (r.statusCode != 200) throw _err('git $op', r);
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
@@ -302,7 +365,8 @@ class DaemonClient {
   Future<GitStatus> gitStatus(String session) async =>
       GitStatus.fromJson(await _gitPost('status', {'session': session}));
 
-  Future<String> gitDiff(String session, {String? file, bool staged = false, bool untracked = false}) async {
+  Future<String> gitDiff(String session,
+      {String? file, bool staged = false, bool untracked = false}) async {
     final d = await _gitPost('diff', {
       'session': session,
       if (file != null) 'file': file,
@@ -330,16 +394,23 @@ class DaemonClient {
 
   Future<Map<String, dynamic>> gitStage(String session,
           {List<String>? paths, bool all = false}) =>
-      _gitPost('stage', {'session': session, if (paths != null) 'paths': paths, 'all': all});
+      _gitPost('stage',
+          {'session': session, if (paths != null) 'paths': paths, 'all': all});
 
-  Future<Map<String, dynamic>> gitUnstage(String session, {List<String>? paths}) =>
-      _gitPost('unstage', {'session': session, if (paths != null) 'paths': paths});
+  Future<Map<String, dynamic>> gitUnstage(String session,
+          {List<String>? paths}) =>
+      _gitPost(
+          'unstage', {'session': session, if (paths != null) 'paths': paths});
 
-  Future<Map<String, dynamic>> gitCommit(String session, String message, {bool amend = false}) =>
-      _gitPost('commit', {'session': session, 'message': message, 'amend': amend});
+  Future<Map<String, dynamic>> gitCommit(String session, String message,
+          {bool amend = false}) =>
+      _gitPost(
+          'commit', {'session': session, 'message': message, 'amend': amend});
 
-  Future<Map<String, dynamic>> gitCheckout(String session, String target, {bool create = false}) =>
-      _gitPost('checkout', {'session': session, 'target': target, 'create': create});
+  Future<Map<String, dynamic>> gitCheckout(String session, String target,
+          {bool create = false}) =>
+      _gitPost(
+          'checkout', {'session': session, 'target': target, 'create': create});
 
   Future<List<Map<String, dynamic>>> bgList(String session) async {
     final r = await http.post(_uri('/bg'),
@@ -365,9 +436,11 @@ class DaemonClient {
     return j['log'] as String? ?? '';
   }
 
-  Future<Map<String, dynamic>> gitPush(String session) => _gitPost('push', {'session': session});
+  Future<Map<String, dynamic>> gitPush(String session) =>
+      _gitPost('push', {'session': session});
 
-  Future<Map<String, dynamic>> gitPull(String session) => _gitPost('pull', {'session': session});
+  Future<Map<String, dynamic>> gitPull(String session) =>
+      _gitPost('pull', {'session': session});
 
   Future<Map<String, dynamic>> gitStash(String session, String op) =>
       _gitPost('stash', {'session': session, 'op': op});

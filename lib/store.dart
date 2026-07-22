@@ -4,9 +4,51 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
 
+class OpenTabDescriptor {
+  final String instanceUrl;
+  final String? sessionId;
+  final String? filePath;
+  final String title;
+  final String? profile;
+
+  const OpenTabDescriptor({
+    required this.instanceUrl,
+    this.sessionId,
+    this.filePath,
+    required this.title,
+    this.profile,
+  });
+
+  factory OpenTabDescriptor.fromJson(Map<String, dynamic> j) =>
+      OpenTabDescriptor(
+        instanceUrl: j['instance_url'] as String? ?? '',
+        sessionId: j['session_id'] as String?,
+        filePath: j['file_path'] as String?,
+        title: j['title'] as String? ?? '',
+        profile: j['profile'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'instance_url': instanceUrl,
+        if (sessionId != null) 'session_id': sessionId,
+        if (filePath != null) 'file_path': filePath,
+        'title': title,
+        if (profile != null) 'profile': profile,
+      };
+
+  bool get isFile => filePath != null;
+}
+
+class OpenTabsState {
+  final List<OpenTabDescriptor> tabs;
+  final int activeIndex;
+  const OpenTabsState(this.tabs, this.activeIndex);
+}
+
 /// Persists the list of saved daemon instances in shared_preferences.
 class InstanceStore {
   static const _key = 'instances';
+  static const _tabsKey = 'open_tabs';
 
   Future<List<Instance>> load() async {
     final p = await SharedPreferences.getInstance();
@@ -31,6 +73,36 @@ class InstanceStore {
       return [inst];
     }
     return [];
+  }
+
+  Future<OpenTabsState> loadOpenTabs() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_tabsKey);
+    if (raw == null) return const OpenTabsState([], -1);
+    try {
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      final tabs = ((j['tabs'] as List?) ?? const [])
+          .map((e) => OpenTabDescriptor.fromJson(e as Map<String, dynamic>))
+          .where((t) =>
+              t.instanceUrl.isNotEmpty &&
+              (t.sessionId != null || t.filePath != null))
+          .toList();
+      final active = (j['active_index'] as num?)?.toInt() ?? -1;
+      return OpenTabsState(tabs, active);
+    } catch (_) {
+      return const OpenTabsState([], -1);
+    }
+  }
+
+  Future<void> saveOpenTabs(
+      List<OpenTabDescriptor> tabs, int activeIndex) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(
+        _tabsKey,
+        jsonEncode({
+          'tabs': tabs.map((t) => t.toJson()).toList(),
+          'active_index': activeIndex,
+        }));
   }
 
   Future<void> save(List<Instance> items) async {

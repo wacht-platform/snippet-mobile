@@ -25,7 +25,8 @@ void toast(BuildContext context, String message, {bool danger = false}) {
       left: 0,
       right: 0,
       bottom: MediaQuery.of(ctx).padding.bottom + 28,
-      child: IgnorePointer(child: Center(child: _ToastCard(message: message, danger: danger))),
+      child: IgnorePointer(
+          child: Center(child: _ToastCard(message: message, danger: danger))),
     ),
   );
   _activeToast = entry;
@@ -43,7 +44,8 @@ void toast(BuildContext context, String message, {bool danger = false}) {
 /// are reachable. Tapping an action dismisses it.
 typedef ToastAction = ({String label, String icon, VoidCallback onTap});
 
-void actionToast(BuildContext context, String message, {required List<ToastAction> actions}) {
+void actionToast(BuildContext context, String message,
+    {required List<ToastAction> actions}) {
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) return;
   _activeToast?.remove();
@@ -66,12 +68,18 @@ void actionToast(BuildContext context, String message, {required List<ToastActio
         child: _ToastCard(
           message: message,
           danger: false,
-          actions: actions.map((a) => (label: a.label, icon: a.icon, onTap: () {
-                // Run the action first, then tear the toast down — removing the
-                // overlay entry mid-tap could otherwise swallow the action.
-                a.onTap();
-                dismiss();
-              })).toList(),
+          actions: actions
+              .map((a) => (
+                    label: a.label,
+                    icon: a.icon,
+                    onTap: () {
+                      // Run the action first, then tear the toast down — removing the
+                      // overlay entry mid-tap could otherwise swallow the action.
+                      a.onTap();
+                      dismiss();
+                    }
+                  ))
+              .toList(),
         ),
       ),
     ),
@@ -85,13 +93,17 @@ class _ToastCard extends StatefulWidget {
   final String message;
   final bool danger;
   final List<ToastAction> actions;
-  const _ToastCard({required this.message, required this.danger, this.actions = const []});
+  const _ToastCard(
+      {required this.message, required this.danger, this.actions = const []});
   @override
   State<_ToastCard> createState() => _ToastCardState();
 }
 
-class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 220))..forward();
+class _ToastCardState extends State<_ToastCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 220))
+    ..forward();
   @override
   void dispose() {
     _c.dispose();
@@ -109,7 +121,8 @@ class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMi
       child: FadeTransition(
         opacity: curve,
         child: SlideTransition(
-          position: Tween(begin: const Offset(0, 0.18), end: Offset.zero).animate(curve),
+          position: Tween(begin: const Offset(0, 0.18), end: Offset.zero)
+              .animate(curve),
           child: Container(
             constraints: const BoxConstraints(maxWidth: 460),
             margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -118,7 +131,12 @@ class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMi
               color: AppColors.surface1,
               borderRadius: BorderRadius.circular(R.card),
               border: Border.all(color: AppColors.border),
-              boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 28, offset: Offset(0, 10))],
+              boxShadow: const [
+                BoxShadow(
+                    color: Color(0x66000000),
+                    blurRadius: 28,
+                    offset: Offset(0, 10))
+              ],
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Container(
@@ -128,12 +146,15 @@ class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMi
                   color: accent.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Center(child: AppIcon(widget.danger ? 'alert-triangle' : 'check', size: 14, color: accent)),
+                child: Center(
+                    child: AppIcon(widget.danger ? 'alert-triangle' : 'check',
+                        size: 14, color: accent)),
               ),
               const SizedBox(width: 11),
               Flexible(
                 child: Text(widget.message,
-                    style: sans(13, height: 1.3, color: AppColors.fg1).copyWith(decoration: TextDecoration.none)),
+                    style: sans(13, height: 1.3, color: AppColors.fg1)
+                        .copyWith(decoration: TextDecoration.none)),
               ),
               for (final a in widget.actions) ...[
                 const SizedBox(width: 8),
@@ -141,7 +162,8 @@ class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMi
                   behavior: HitTestBehavior.opaque,
                   onTap: a.onTap,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: AppColors.surface2,
                       borderRadius: BorderRadius.circular(R.sm),
@@ -151,7 +173,9 @@ class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMi
                       AppIcon(a.icon, size: 13, color: AppColors.fg1),
                       const SizedBox(width: 6),
                       Text(a.label,
-                          style: sans(12.5, weight: FontWeight.w600, color: AppColors.fg1).copyWith(decoration: TextDecoration.none)),
+                          style: sans(12.5,
+                                  weight: FontWeight.w600, color: AppColors.fg1)
+                              .copyWith(decoration: TextDecoration.none)),
                     ]),
                   ),
                 ),
@@ -168,7 +192,8 @@ class _ToastCardState extends State<_ToastCard> with SingleTickerProviderStateMi
 /// Compact relative time like "now", "5m", "3h", "2d", "4mo" (empty for 0).
 String relativeTime(int unixSec) {
   if (unixSec == 0) return '';
-  final d = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(unixSec * 1000));
+  final d = DateTime.now()
+      .difference(DateTime.fromMillisecondsSinceEpoch(unixSec * 1000));
   if (d.inMinutes < 1) return 'now';
   if (d.inMinutes < 60) return '${d.inMinutes}m';
   if (d.inHours < 24) return '${d.inHours}h';
@@ -197,20 +222,30 @@ class Pills<T> extends StatelessWidget {
   final List<(T, String)> items;
   final T selected;
   final ValueChanged<T>? onSelect;
-  const Pills({super.key, required this.items, required this.selected, this.onSelect});
+  const Pills(
+      {super.key, required this.items, required this.selected, this.onSelect});
   @override
-  Widget build(BuildContext context) => Wrap(spacing: 7, runSpacing: 7, children: [
+  Widget build(BuildContext context) =>
+      Wrap(spacing: 7, runSpacing: 7, children: [
         for (final (val, label) in items)
           GestureDetector(
             onTap: onSelect == null ? null : () => onSelect!(val),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
               decoration: BoxDecoration(
-                color: selected == val ? AppColors.accentBg : AppColors.surface2,
+                color:
+                    selected == val ? AppColors.accentBg : AppColors.surface2,
                 borderRadius: BorderRadius.circular(99),
-                border: Border.all(color: selected == val ? AppColors.accentLine : AppColors.border),
+                border: Border.all(
+                    color: selected == val
+                        ? AppColors.accentLine
+                        : AppColors.border),
               ),
-              child: Text(label, style: sans(12.5, weight: FontWeight.w500, color: selected == val ? AppColors.accent : AppColors.fg2)),
+              child: Text(label,
+                  style: sans(12.5,
+                      weight: FontWeight.w500,
+                      color:
+                          selected == val ? AppColors.accent : AppColors.fg2)),
             ),
           ),
       ]);
@@ -242,15 +277,18 @@ MarkdownStyleSheet markdownStyle(BuildContext context) {
     blockquoteDecoration: BoxDecoration(
       color: AppColors.surface2,
       borderRadius: BorderRadius.circular(R.xs),
-      border: const Border(left: BorderSide(color: AppColors.accentLine, width: 3)),
+      border:
+          const Border(left: BorderSide(color: AppColors.accentLine, width: 3)),
     ),
     listBullet: sans(16, height: 1.5, color: AppColors.fg1),
     tableBody: sans(14, color: AppColors.fg1),
     // FlexColumnWidth stretches every markdown table to the full message width.
     // Intrinsic columns keep phone tables content-sized; the markdown package
     // supplies horizontal scrolling when a long URL or code value needs it.
-    tableColumnWidth: kMobile ? const IntrinsicColumnWidth() : const FlexColumnWidth(),
-    horizontalRuleDecoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+    tableColumnWidth:
+        kMobile ? const IntrinsicColumnWidth() : const FlexColumnWidth(),
+    horizontalRuleDecoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.border))),
   );
 }
 
@@ -258,8 +296,8 @@ MarkdownStyleSheet markdownStyle(BuildContext context) {
 /// so we don't nest a second chrome box or paint the accent pill on whole blocks.
 class CodeBlockBuilder extends MarkdownElementBuilder {
   @override
-  Widget? visitElementAfterWithContext(
-      BuildContext context, md.Element element, TextStyle? preferredStyle, TextStyle? parentStyle) {
+  Widget? visitElementAfterWithContext(BuildContext context, md.Element element,
+      TextStyle? preferredStyle, TextStyle? parentStyle) {
     final raw = element.textContent;
     final isBlock = raw.contains('\n') ||
         (element.attributes['class'] ?? '').startsWith('language-');
@@ -286,8 +324,8 @@ class PreBlockBuilder extends MarkdownElementBuilder {
   bool isBlockElement() => true;
 
   @override
-  Widget? visitElementAfterWithContext(
-      BuildContext context, md.Element element, TextStyle? preferredStyle, TextStyle? parentStyle) {
+  Widget? visitElementAfterWithContext(BuildContext context, md.Element element,
+      TextStyle? preferredStyle, TextStyle? parentStyle) {
     var code = element.textContent;
     if (code.endsWith('\n')) code = code.substring(0, code.length - 1);
     return _MdCodeBlock(code: code);
@@ -388,9 +426,9 @@ class StatusDot extends StatefulWidget {
 
 class _StatusDotState extends State<StatusDot>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
-        ..repeat(reverse: true);
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1200))
+    ..repeat(reverse: true);
   @override
   void dispose() {
     _c.dispose();
@@ -415,11 +453,17 @@ class _StatusDotState extends State<StatusDot>
         shape: BoxShape.circle,
         boxShadow: widget.status == 'offline'
             ? null
-            : [BoxShadow(color: c.withValues(alpha: 0.6), blurRadius: 8, spreadRadius: 1)],
+            : [
+                BoxShadow(
+                    color: c.withValues(alpha: 0.6),
+                    blurRadius: 8,
+                    spreadRadius: 1)
+              ],
       ),
     );
     if (widget.status == 'checking' || widget.status == 'running') {
-      return FadeTransition(opacity: Tween(begin: 0.45, end: 1.0).animate(_c), child: dot);
+      return FadeTransition(
+          opacity: Tween(begin: 0.45, end: 1.0).animate(_c), child: dot);
     }
     return dot;
   }
@@ -441,9 +485,13 @@ class StatusPill extends StatelessWidget {
     };
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 3, 9, 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(99)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(99)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: 6, height: 6, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+        Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
         const SizedBox(width: 6),
         Text(label, style: sans(11, weight: FontWeight.w500, color: c)),
       ]),
@@ -456,7 +504,11 @@ class AppCard extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
   final EdgeInsetsGeometry padding;
-  const AppCard({super.key, required this.child, this.onTap, this.padding = const EdgeInsets.all(14)});
+  const AppCard(
+      {super.key,
+      required this.child,
+      this.onTap,
+      this.padding = const EdgeInsets.all(14)});
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -503,10 +555,22 @@ class Btn extends StatelessWidget {
   Widget build(BuildContext context) {
     final (Color bg, Color fg, Color? bd) = switch (variant) {
       BtnVariant.primary => (AppColors.accent, AppColors.accentFg, null),
-      BtnVariant.secondary => (AppColors.surface2, AppColors.fg1, AppColors.border),
-      BtnVariant.outline => (Colors.transparent, AppColors.fg1, AppColors.border),
+      BtnVariant.secondary => (
+          AppColors.surface2,
+          AppColors.fg1,
+          AppColors.border
+        ),
+      BtnVariant.outline => (
+          Colors.transparent,
+          AppColors.fg1,
+          AppColors.border
+        ),
       BtnVariant.ghost => (Colors.transparent, AppColors.fg2, null),
-      BtnVariant.danger => (AppColors.dangerBg, AppColors.danger, AppColors.danger.withValues(alpha: 0.3)),
+      BtnVariant.danger => (
+          AppColors.dangerBg,
+          AppColors.danger,
+          AppColors.danger.withValues(alpha: 0.3)
+        ),
     };
     // Compact on desktop (mouse), roomy touch targets on mobile.
     final h = small ? (kMobile ? 34.0 : 28.0) : (kMobile ? 44.0 : 34.0);
@@ -514,9 +578,17 @@ class Btn extends StatelessWidget {
       mainAxisSize: full ? MainAxisSize.max : MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (icon != null) ...[AppIcon(icon!, size: small ? 15 : 17, color: fg), const SizedBox(width: 8)],
-        Text(label, style: sans(small ? 12.5 : 13.5, weight: FontWeight.w500, color: fg)),
-        if (iconRight != null) ...[const SizedBox(width: 8), AppIcon(iconRight!, size: small ? 15 : 17, color: fg)],
+        if (icon != null) ...[
+          AppIcon(icon!, size: small ? 15 : 17, color: fg),
+          const SizedBox(width: 8)
+        ],
+        Text(label,
+            style:
+                sans(small ? 12.5 : 13.5, weight: FontWeight.w500, color: fg)),
+        if (iconRight != null) ...[
+          const SizedBox(width: 8),
+          AppIcon(iconRight!, size: small ? 15 : 17, color: fg)
+        ],
       ],
     );
     return Opacity(
@@ -564,10 +636,13 @@ class PillBtn extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: kMobile ? 20 : 16),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               if (icon != null) ...[
-                AppIcon(icon!, size: kMobile ? 18 : 16, color: AppColors.accentFg),
+                AppIcon(icon!,
+                    size: kMobile ? 18 : 16, color: AppColors.accentFg),
                 const SizedBox(width: 8),
               ],
-              Text(label, style: sans(kMobile ? 14.5 : 13, weight: FontWeight.w500, color: AppColors.accentFg)),
+              Text(label,
+                  style: sans(kMobile ? 14.5 : 13,
+                      weight: FontWeight.w500, color: AppColors.accentFg)),
             ]),
           ),
         ),
@@ -584,7 +659,12 @@ class IconBtn extends StatelessWidget {
   final bool active;
   final String? tooltip;
   const IconBtn(this.name,
-      {super.key, this.onTap, this.size = 38, this.iconSize = 19, this.active = false, this.tooltip});
+      {super.key,
+      this.onTap,
+      this.size = 38,
+      this.iconSize = 19,
+      this.active = false,
+      this.tooltip});
   @override
   Widget build(BuildContext context) {
     final btn = Material(
@@ -596,7 +676,8 @@ class IconBtn extends StatelessWidget {
         child: SizedBox(
           width: size,
           height: size,
-          child: Icon(iconFor(name), size: iconSize, color: active ? AppColors.accent : AppColors.fg2),
+          child: Icon(iconFor(name),
+              size: iconSize, color: active ? AppColors.accent : AppColors.fg2),
         ),
       ),
     );
@@ -624,7 +705,9 @@ class AddCard extends StatelessWidget {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const AppIcon('plus', size: 15),
             const SizedBox(width: 8),
-            Text(label, style: sans(12.5, weight: FontWeight.w500, color: AppColors.fg2)),
+            Text(label,
+                style:
+                    sans(12.5, weight: FontWeight.w500, color: AppColors.fg2)),
           ]),
         ),
       ),
@@ -643,8 +726,8 @@ class _DashedBorder extends CustomPainter {
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
     final path = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-          Offset.zero & size, Radius.circular(radius)));
+      ..addRRect(
+          RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)));
     const dash = 5.0, gap = 4.0;
     for (final m in path.computeMetrics()) {
       double d = 0;
@@ -660,11 +743,13 @@ class _DashedBorder extends CustomPainter {
 }
 
 /// Internal attachment markers the agent reads but users must never see.
-final RegExp _attachMarkerRe = RegExp(r'\[attached (image|file) —[^\]]*\]', multiLine: true);
+final RegExp _attachMarkerRe =
+    RegExp(r'\[attached (image|file) —[^\]]*\]', multiLine: true);
 
 /// Strip the internal `[attached …]` markers from displayed text — the attachment
 /// itself is surfaced separately, as a pill on the message (see [Bubble]).
-String hideAttachmentMarkers(String raw) => raw.replaceAll(_attachMarkerRe, '').trim();
+String hideAttachmentMarkers(String raw) =>
+    raw.replaceAll(_attachMarkerRe, '').trim();
 
 /// Read-only attachment summary on a sent message — icon + count, no emoji.
 /// Images and files each get their own compact pill (matches desktop).
@@ -711,7 +796,8 @@ class Bubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final matches = _attachMarkerRe.allMatches(text).toList();
-    final shown = matches.isEmpty ? text : text.replaceAll(_attachMarkerRe, '').trim();
+    final shown =
+        matches.isEmpty ? text : text.replaceAll(_attachMarkerRe, '').trim();
     final images = matches.where((m) => m.group(1) == 'image').length;
     final files = matches.length - images;
     // Clean, Claude-style: a readable sender header (no accent bar / outline),
@@ -719,14 +805,17 @@ class Bubble extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(
         mine ? 'You' : 'Snippet',
-        style: sans(13.5, weight: FontWeight.w600, color: mine ? AppColors.fg2 : AppColors.accent),
+        style: sans(13.5,
+            weight: FontWeight.w600,
+            color: mine ? AppColors.fg2 : AppColors.accent),
       ),
       const SizedBox(height: 6),
       if (mine) ...[
         // Plain Text on purpose: the transcript is wrapped in ONE SelectionArea
         // (session.dart), which gives continuous selection ACROSS paragraphs and
         // messages. Per-widget SelectableText would break that continuity.
-        if (shown.isNotEmpty) Text(shown, style: sans(16, height: 1.5, color: AppColors.fg1)),
+        if (shown.isNotEmpty)
+          Text(shown, style: sans(16, height: 1.5, color: AppColors.fg1)),
         // A sent attachment stays visible as a pill (below any text it came with).
         if (matches.isNotEmpty) ...[
           if (shown.isNotEmpty) const SizedBox(height: 8),
@@ -741,7 +830,7 @@ class Bubble extends StatelessWidget {
           data: shown,
           selectable: false,
           styleSheet: markdownStyle(context),
-          builders: {'code': CodeBlockBuilder(), 'pre': PreBlockBuilder()},
+          builders: {'pre': PreBlockBuilder()},
           onTapLink: (txt, href, title) => openMarkdownLink(href),
         ),
         // Copy only on agent messages.
@@ -789,35 +878,59 @@ class ToolLine extends StatelessWidget {
   final bool done;
   final String icon;
   final VoidCallback? onTap;
-  const ToolLine({super.key, required this.tool, this.arg = '', this.out, this.done = true, this.icon = 'terminal', this.onTap});
+  const ToolLine(
+      {super.key,
+      required this.tool,
+      this.arg = '',
+      this.out,
+      this.done = true,
+      this.icon = 'terminal',
+      this.onTap});
   @override
   Widget build(BuildContext context) {
-    final inner = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    final inner =
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         AppIcon(icon, size: 13, color: AppColors.fg3),
         const SizedBox(width: 7),
         Text(tool, style: mono(12, color: AppColors.fg1)),
         const SizedBox(width: 7),
-        Expanded(child: Text(arg, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(12, color: AppColors.fg3))),
-        if (onTap != null) const Padding(padding: EdgeInsets.only(left: 4), child: AppIcon('chevron-right', size: 14, color: AppColors.fg4)),
+        Expanded(
+            child: Text(arg,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: mono(12, color: AppColors.fg3))),
+        if (onTap != null)
+          const Padding(
+              padding: EdgeInsets.only(left: 4),
+              child: AppIcon('chevron-right', size: 14, color: AppColors.fg4)),
       ]),
       if (out != null)
         Padding(
           padding: const EdgeInsets.only(left: 20, top: 3),
           child: Row(children: [
-            Text('↳ ', style: mono(11.5, color: done ? AppColors.fg2 : AppColors.fg4)),
-            Expanded(child: Text(out!, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(11.5, color: AppColors.fg3))),
+            Text('↳ ',
+                style: mono(11.5, color: done ? AppColors.fg2 : AppColors.fg4)),
+            Expanded(
+                child: Text(out!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: mono(11.5, color: AppColors.fg3))),
           ]),
         ),
     ]);
-    if (onTap == null) return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: inner);
+    if (onTap == null)
+      return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2), child: inner);
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(R.sm),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(R.sm),
-        child: Padding(padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4), child: inner),
+        child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+            child: inner),
       ),
     );
   }
@@ -834,11 +947,15 @@ class NoteLine extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 8),
       child: Row(
-        mainAxisAlignment: error ? MainAxisAlignment.start : MainAxisAlignment.center,
+        mainAxisAlignment:
+            error ? MainAxisAlignment.start : MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (error) ...[
-            const Padding(padding: EdgeInsets.only(top: 1), child: AppIcon('alert-triangle', size: 12, color: AppColors.danger)),
+            const Padding(
+                padding: EdgeInsets.only(top: 1),
+                child: AppIcon('alert-triangle',
+                    size: 12, color: AppColors.danger)),
             const SizedBox(width: 7),
           ],
           Flexible(
@@ -859,7 +976,12 @@ class StatTile extends StatelessWidget {
   final String value;
   final String? sub;
   final bool accent;
-  const StatTile({super.key, required this.label, required this.value, this.sub, this.accent = false});
+  const StatTile(
+      {super.key,
+      required this.label,
+      required this.value,
+      this.sub,
+      this.accent = false});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -869,12 +991,21 @@ class StatTile extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(R.md),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-        Text(label, style: sans(10.5, color: AppColors.fg3)),
-        const SizedBox(height: 5),
-        Text(value, style: mono(16, weight: FontWeight.w500, color: accent ? AppColors.accent : AppColors.fg1)),
-        if (sub != null) ...[const SizedBox(height: 4), Text(sub!, style: mono(10, color: AppColors.fg4))],
-      ]),
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: sans(10.5, color: AppColors.fg3)),
+            const SizedBox(height: 5),
+            Text(value,
+                style: mono(16,
+                    weight: FontWeight.w500,
+                    color: accent ? AppColors.accent : AppColors.fg1)),
+            if (sub != null) ...[
+              const SizedBox(height: 4),
+              Text(sub!, style: mono(10, color: AppColors.fg4))
+            ],
+          ]),
     );
   }
 }
@@ -883,7 +1014,11 @@ class Progress extends StatelessWidget {
   final double pct; // 0..100
   final Color color;
   final double height;
-  const Progress({super.key, required this.pct, this.color = AppColors.accent, this.height = 7});
+  const Progress(
+      {super.key,
+      required this.pct,
+      this.color = AppColors.accent,
+      this.height = 7});
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
@@ -905,11 +1040,13 @@ class WarnChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: AppColors.runBg, borderRadius: BorderRadius.circular(99)),
+      decoration: BoxDecoration(
+          color: AppColors.runBg, borderRadius: BorderRadius.circular(99)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         const AppIcon('alert-triangle', size: 11, color: AppColors.run),
         const SizedBox(width: 5),
-        Text(label, style: sans(10.5, weight: FontWeight.w500, color: AppColors.run)),
+        Text(label,
+            style: sans(10.5, weight: FontWeight.w500, color: AppColors.run)),
       ]),
     );
   }
@@ -922,7 +1059,8 @@ class SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
         child: Text(text.toUpperCase(),
-            style: sans(10.5, weight: FontWeight.w500, spacing: 0.8, color: AppColors.fg4)),
+            style: sans(10.5,
+                weight: FontWeight.w500, spacing: 0.8, color: AppColors.fg4)),
       );
 }
 
@@ -931,7 +1069,12 @@ class EmptyState extends StatelessWidget {
   final String title;
   final String? body;
   final Widget? action;
-  const EmptyState({super.key, required this.icon, required this.title, this.body, this.action});
+  const EmptyState(
+      {super.key,
+      required this.icon,
+      required this.title,
+      this.body,
+      this.action});
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -948,12 +1091,15 @@ class EmptyState extends StatelessWidget {
           child: AppIcon(icon, size: 24, color: AppColors.fg3),
         ),
         const SizedBox(height: 12),
-        Text(title, style: sans(15, weight: FontWeight.w600, color: AppColors.fg1)),
+        Text(title,
+            style: sans(15, weight: FontWeight.w600, color: AppColors.fg1)),
         if (body != null) ...[
           const SizedBox(height: 8),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 240),
-            child: Text(body!, textAlign: TextAlign.center, style: sans(12.5, height: 1.5, color: AppColors.fg3)),
+            child: Text(body!,
+                textAlign: TextAlign.center,
+                style: sans(12.5, height: 1.5, color: AppColors.fg3)),
           ),
         ],
         if (action != null) ...[const SizedBox(height: 16), action!],
@@ -969,7 +1115,13 @@ class SnAppBar extends StatelessWidget {
   final VoidCallback? onBack;
   final Widget? leading;
   final List<Widget> actions;
-  const SnAppBar({super.key, required this.title, this.subtitle, this.onBack, this.leading, this.actions = const []});
+  const SnAppBar(
+      {super.key,
+      required this.title,
+      this.subtitle,
+      this.onBack,
+      this.leading,
+      this.actions = const []});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -982,14 +1134,31 @@ class SnAppBar extends StatelessWidget {
         border: const Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(children: [
-        if (leading != null) leading! else if (onBack != null) IconBtn('chevron-left', size: kMobile ? 42 : 38, iconSize: kMobile ? 27 : 22, onTap: onBack) else const SizedBox(width: 8),
+        if (leading != null)
+          leading!
+        else if (onBack != null)
+          IconBtn('chevron-left',
+              size: kMobile ? 42 : 38,
+              iconSize: kMobile ? 27 : 22,
+              onTap: onBack)
+        else
+          const SizedBox(width: 8),
         const SizedBox(width: 4),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: display(17)),
-            if (subtitle != null)
-              Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(11.5, color: AppColors.fg3)),
-          ]),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: display(17)),
+                if (subtitle != null)
+                  Text(subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: mono(11.5, color: AppColors.fg3)),
+              ]),
         ),
         ...actions,
       ]),
@@ -1053,7 +1222,8 @@ class _AppFieldState extends State<AppField> {
     final focused = _focus.hasFocus;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (widget.label != null) ...[
-        Text(widget.label!, style: sans(12, weight: FontWeight.w500, color: AppColors.fg2)),
+        Text(widget.label!,
+            style: sans(12, weight: FontWeight.w500, color: AppColors.fg2)),
         const SizedBox(height: 7),
       ],
       AnimatedContainer(
@@ -1063,13 +1233,22 @@ class _AppFieldState extends State<AppField> {
         decoration: BoxDecoration(
           color: AppColors.surface2,
           borderRadius: BorderRadius.circular(R.md),
-          border: Border.all(color: focused ? AppColors.accent : AppColors.border),
+          border:
+              Border.all(color: focused ? AppColors.accent : AppColors.border),
           boxShadow: focused
-              ? [BoxShadow(color: AppColors.accentRing, blurRadius: 0, spreadRadius: 2)]
+              ? [
+                  BoxShadow(
+                      color: AppColors.accentRing,
+                      blurRadius: 0,
+                      spreadRadius: 2)
+                ]
               : null,
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          if (widget.icon != null) ...[AppIcon(widget.icon!, size: 16, color: AppColors.fg3), const SizedBox(width: 8)],
+          if (widget.icon != null) ...[
+            AppIcon(widget.icon!, size: 16, color: AppColors.fg3),
+            const SizedBox(width: 8)
+          ],
           Expanded(
             child: TextField(
               controller: widget.controller,
@@ -1082,13 +1261,18 @@ class _AppFieldState extends State<AppField> {
               keyboardType: widget.keyboardType,
               onSubmitted: widget.onSubmitted,
               cursorColor: AppColors.accent,
-              style: widget.mono ? mono(13, color: AppColors.fg1) : sans(13, color: AppColors.fg1),
+              style: widget.mono
+                  ? mono(13, color: AppColors.fg1)
+                  : sans(13, color: AppColors.fg1),
               decoration: InputDecoration(
                 isCollapsed: true,
-                contentPadding: EdgeInsets.symmetric(vertical: kMobile ? 12 : 8),
+                contentPadding:
+                    EdgeInsets.symmetric(vertical: kMobile ? 12 : 8),
                 border: InputBorder.none,
                 hintText: widget.hint,
-                hintStyle: widget.mono ? mono(13, color: AppColors.fg4) : sans(13, color: AppColors.fg4),
+                hintStyle: widget.mono
+                    ? mono(13, color: AppColors.fg4)
+                    : sans(13, color: AppColors.fg4),
               ),
             ),
           ),
@@ -1097,7 +1281,8 @@ class _AppFieldState extends State<AppField> {
       ),
       if (widget.helper != null) ...[
         const SizedBox(height: 7),
-        Text(widget.helper!, style: sans(11, height: 1.4, color: AppColors.fg3)),
+        Text(widget.helper!,
+            style: sans(11, height: 1.4, color: AppColors.fg3)),
       ],
     ]);
   }
@@ -1107,26 +1292,41 @@ class _AppFieldState extends State<AppField> {
 /// A bottom-sheet single-field text prompt (rename, etc.). Returns the trimmed
 /// text on save, or null if cancelled.
 Future<String?> promptText(BuildContext context,
-    {required String title, String initial = '', String? hint, String saveLabel = 'Save'}) {
+    {required String title,
+    String initial = '',
+    String? hint,
+    String saveLabel = 'Save'}) {
   final ctrl = TextEditingController(text: initial);
-  return showAppSheet<String>(context, title: title, child: Builder(builder: (ctx) {
+  return showAppSheet<String>(context, title: title,
+      child: Builder(builder: (ctx) {
     void done() => Navigator.pop(ctx, ctrl.text.trim());
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        AppField(controller: ctrl, hint: hint, autofocus: true, onSubmitted: (_) => done()),
-        const SizedBox(height: 14),
-        Row(children: [
-          Expanded(child: Btn('Cancel', variant: BtnVariant.secondary, onTap: () => Navigator.pop(ctx))),
-          const SizedBox(width: 10),
-          Expanded(child: Btn(saveLabel, onTap: done)),
-        ]),
-      ]),
+      child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppField(
+                controller: ctrl,
+                hint: hint,
+                autofocus: true,
+                onSubmitted: (_) => done()),
+            const SizedBox(height: 14),
+            Row(children: [
+              Expanded(
+                  child: Btn('Cancel',
+                      variant: BtnVariant.secondary,
+                      onTap: () => Navigator.pop(ctx))),
+              const SizedBox(width: 10),
+              Expanded(child: Btn(saveLabel, onTap: done)),
+            ]),
+          ]),
     );
   }));
 }
 
-Future<T?> showAppSheet<T>(BuildContext context, {required String title, required Widget child}) {
+Future<T?> showAppSheet<T>(BuildContext context,
+    {required String title, required Widget child}) {
   return showModalBottomSheet<T>(
     context: context,
     backgroundColor: Colors.transparent,
@@ -1139,15 +1339,26 @@ Future<T?> showAppSheet<T>(BuildContext context, {required String title, require
         borderRadius: BorderRadius.vertical(top: Radius.circular(R.sheetTop)),
         border: Border(top: BorderSide(color: AppColors.border2)),
       ),
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.82),
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.82),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         const SizedBox(height: 9),
-        Center(child: Container(width: 38, height: 4, decoration: BoxDecoration(color: AppColors.border2, borderRadius: BorderRadius.circular(99)))),
+        Center(
+            child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: AppColors.border2,
+                    borderRadius: BorderRadius.circular(99)))),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 8, 12),
           child: Row(children: [
-            Expanded(child: Text(title, style: sans(16, weight: FontWeight.w600, color: AppColors.fg1))),
-            IconBtn('x', size: 32, iconSize: 18, onTap: () => Navigator.pop(context)),
+            Expanded(
+                child: Text(title,
+                    style: sans(16,
+                        weight: FontWeight.w600, color: AppColors.fg1))),
+            IconBtn('x',
+                size: 32, iconSize: 18, onTap: () => Navigator.pop(context)),
           ]),
         ),
         Flexible(
@@ -1167,7 +1378,12 @@ class AppToggle extends StatelessWidget {
   final ValueChanged<bool> onChanged;
   final String label;
   final String? sub;
-  const AppToggle({super.key, required this.on, required this.onChanged, required this.label, this.sub});
+  const AppToggle(
+      {super.key,
+      required this.on,
+      required this.onChanged,
+      required this.label,
+      this.sub});
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -1182,9 +1398,15 @@ class AppToggle extends StatelessWidget {
         ),
         child: Row(children: [
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(label, style: sans(13, weight: FontWeight.w500, color: AppColors.fg1)),
-              if (sub != null) ...[const SizedBox(height: 3), Text(sub!, style: sans(11, color: AppColors.fg3))],
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label,
+                  style:
+                      sans(13, weight: FontWeight.w500, color: AppColors.fg1)),
+              if (sub != null) ...[
+                const SizedBox(height: 3),
+                Text(sub!, style: sans(11, color: AppColors.fg3))
+              ],
             ]),
           ),
           const SizedBox(width: 12),
@@ -1192,7 +1414,9 @@ class AppToggle extends StatelessWidget {
             duration: const Duration(milliseconds: 200),
             width: 40,
             height: 24,
-            decoration: BoxDecoration(color: on ? AppColors.accent : AppColors.surface3, borderRadius: BorderRadius.circular(99)),
+            decoration: BoxDecoration(
+                color: on ? AppColors.accent : AppColors.surface3,
+                borderRadius: BorderRadius.circular(99)),
             child: AnimatedAlign(
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,
@@ -1201,7 +1425,8 @@ class AppToggle extends StatelessWidget {
                 margin: const EdgeInsets.all(3),
                 width: 18,
                 height: 18,
-                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                decoration: const BoxDecoration(
+                    color: Colors.white, shape: BoxShape.circle),
               ),
             ),
           ),

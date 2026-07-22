@@ -28,9 +28,18 @@ class FileExplorer extends StatefulWidget {
   final String title;
   final String? start; // initial folder (null = the daemon's home dir)
   final VoidCallback? onClose; // dismiss when hosted in a desktop panel
-  final void Function(String folder)? onNewChat; // start a chat in the current folder
-  final void Function(String path, String name)? onOpenFile; // open as a shell tab
-  const FileExplorer({super.key, required this.client, this.title = 'Files', this.start, this.onClose, this.onNewChat, this.onOpenFile});
+  final void Function(String folder)?
+      onNewChat; // start a chat in the current folder
+  final void Function(String path, String name)?
+      onOpenFile; // open as a shell tab
+  const FileExplorer(
+      {super.key,
+      required this.client,
+      this.title = 'Files',
+      this.start,
+      this.onClose,
+      this.onNewChat,
+      this.onOpenFile});
   @override
   State<FileExplorer> createState() => _FileExplorerState();
 }
@@ -39,8 +48,10 @@ class _FileExplorerState extends State<FileExplorer> {
   late Future<FsListing> _future;
   bool _selecting = false;
   final Set<String> _selected = {};
-  String? _busy; // non-null while uploading/deleting (label shown in a progress strip)
-  String? _root; // the folder we opened at — the OS back button climbs no higher
+  String?
+      _busy; // non-null while uploading/deleting (label shown in a progress strip)
+  String?
+      _root; // the folder we opened at — the OS back button climbs no higher
 
   @override
   void initState() {
@@ -72,21 +83,33 @@ class _FileExplorerState extends State<FileExplorer> {
   Future<void> _deleteSelected(String cwd) async {
     final n = _selected.length;
     if (n == 0) return;
-    final ok = await showAppSheet<bool>(context, title: 'Delete $n item${n == 1 ? '' : 's'}?', child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('Permanently deletes the selected item${n == 1 ? '' : 's'} from the machine. Folders are removed with their contents.', style: sans(12, height: 1.45, color: AppColors.fg3)),
-        const SizedBox(height: 16),
-        Row(children: [
-          Expanded(child: Btn('Cancel', variant: BtnVariant.secondary, onTap: () => Navigator.pop(context, false))),
-          const SizedBox(width: 10),
-          Expanded(child: Btn('Delete', variant: BtnVariant.danger, icon: 'trash', onTap: () => Navigator.pop(context, true))),
-        ]),
-      ],
-    ));
+    final ok = await showAppSheet<bool>(context,
+        title: 'Delete $n item${n == 1 ? '' : 's'}?',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+                'Permanently deletes the selected item${n == 1 ? '' : 's'} from the machine. Folders are removed with their contents.',
+                style: sans(12, height: 1.45, color: AppColors.fg3)),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(
+                  child: Btn('Cancel',
+                      variant: BtnVariant.secondary,
+                      onTap: () => Navigator.pop(context, false))),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Btn('Delete',
+                      variant: BtnVariant.danger,
+                      icon: 'trash',
+                      onTap: () => Navigator.pop(context, true))),
+            ]),
+          ],
+        ));
     if (ok != true) return;
-    if (mounted) setState(() => _busy = 'Deleting $n item${n == 1 ? '' : 's'}…');
+    if (mounted)
+      setState(() => _busy = 'Deleting $n item${n == 1 ? '' : 's'}…');
     var failed = 0;
     for (final p in _selected.toList()) {
       try {
@@ -97,12 +120,14 @@ class _FileExplorerState extends State<FileExplorer> {
     }
     if (!mounted) return;
     setState(() => _busy = null);
-    if (failed > 0) toast(context, 'Failed to delete $failed item(s)', danger: true);
+    if (failed > 0)
+      toast(context, 'Failed to delete $failed item(s)', danger: true);
     _go(cwd); // refresh + clears selection
   }
 
   Future<void> _newFolder(String cwd) async {
-    final name = await promptText(context, title: 'New folder', hint: 'Folder name', saveLabel: 'Create');
+    final name = await promptText(context,
+        title: 'New folder', hint: 'Folder name', saveLabel: 'Create');
     final trimmed = name?.trim();
     if (trimmed == null || trimmed.isEmpty) return;
     try {
@@ -118,7 +143,8 @@ class _FileExplorerState extends State<FileExplorer> {
   Future<void> _upload(String cwd) async {
     FilePickerResult? res;
     try {
-      res = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true, type: FileType.any);
+      res = await FilePicker.platform
+          .pickFiles(allowMultiple: true, withData: true, type: FileType.any);
     } catch (e) {
       if (mounted) toast(context, '$e', danger: true);
       return;
@@ -128,9 +154,11 @@ class _FileExplorerState extends State<FileExplorer> {
     var uploaded = 0;
     for (var i = 0; i < files.length; i++) {
       final f = files[i];
-      if (mounted) setState(() => _busy = 'Uploading ${i + 1}/${files.length}…');
+      if (mounted)
+        setState(() => _busy = 'Uploading ${i + 1}/${files.length}…');
       try {
-        final bytes = f.bytes ?? (f.path != null ? await File(f.path!).readAsBytes() : null);
+        final bytes = f.bytes ??
+            (f.path != null ? await File(f.path!).readAsBytes() : null);
         if (bytes == null) continue;
         await widget.client.uploadFile(bytes, name: f.name, dir: cwd);
         uploaded++;
@@ -155,7 +183,8 @@ class _FileExplorerState extends State<FileExplorer> {
     }
     presentScreen(
       context,
-      builder: (_, close) => FileViewer(client: widget.client, path: e.path, name: e.name, onClose: close),
+      builder: (_, close) => FileViewer(
+          client: widget.client, path: e.path, name: e.name, onClose: close),
     );
   }
 
@@ -163,7 +192,8 @@ class _FileExplorerState extends State<FileExplorer> {
   // git in that directory; non-repos show a "No git here" message).
   void _openGit(String dir) => presentScreen(
         context,
-        builder: (_, close) => GitScreen(client: widget.client, folder: dir, onClose: close),
+        builder: (_, close) =>
+            GitScreen(client: widget.client, folder: dir, onClose: close),
       );
 
   @override
@@ -176,105 +206,182 @@ class _FileExplorerState extends State<FileExplorer> {
           builder: (context, snap) {
             final listing = snap.data;
             if (listing != null) _root ??= listing.path;
-            final segs = (listing?.path ?? '').split('/').where((s) => s.isNotEmpty).toList();
+            final segs = (listing?.path ?? '')
+                .split('/')
+                .where((s) => s.isNotEmpty)
+                .toList();
             // OS/gesture back: exit select mode first → else climb ONE folder →
             // and only leave the browser once we're back at the folder we opened.
             final canLeave = !_selecting &&
-                (listing == null || listing.parent == null || listing.path == _root);
+                (listing == null ||
+                    listing.parent == null ||
+                    listing.path == _root);
             return PopScope(
               canPop: canLeave,
               onPopInvokedWithResult: (didPop, _) {
                 if (didPop) return;
                 if (_selecting) {
                   _exitSelect();
-                } else if (listing != null && listing.parent != null && listing.path != _root) {
+                } else if (listing != null &&
+                    listing.parent != null &&
+                    listing.path != _root) {
                   _go(listing.parent);
                 }
               },
               child: Column(children: [
-              SnAppBar(
-                title: _selecting ? '${_selected.length} selected' : widget.title,
-                subtitle: _selecting ? null : listing?.path,
-                onBack: _selecting ? _exitSelect : (widget.onClose ?? () => Navigator.pop(context)),
-                actions: _selecting
-                    ? [
-                        IconBtn('trash', tooltip: 'Delete', onTap: (_busy != null || listing == null || _selected.isEmpty) ? null : () => _deleteSelected(listing.path)),
-                        IconBtn('x', tooltip: 'Cancel', onTap: _exitSelect),
-                      ]
-                    : [
-                        if (listing != null) IconBtn('git-branch', tooltip: 'Git', onTap: () => _openGit(listing.path)),
-                        if (listing != null) IconBtn('upload', tooltip: 'Upload files', onTap: _busy != null ? null : () => _upload(listing.path)),
-                        if (listing != null) IconBtn('folder-plus', tooltip: 'New folder', onTap: _busy != null ? null : () => _newFolder(listing.path)),
-                      ],
-              ),
-              // Prominent CTA: start a chat in the folder you're browsing (no session needed).
-              if (!_selecting && listing != null && widget.onNewChat != null)
-                Material(
-                  color: AppColors.accentBg,
-                  child: InkWell(
-                    onTap: () => widget.onNewChat!(listing.path),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+                SnAppBar(
+                  title: _selecting
+                      ? '${_selected.length} selected'
+                      : widget.title,
+                  subtitle: _selecting ? null : listing?.path,
+                  onBack: _selecting
+                      ? _exitSelect
+                      : (widget.onClose ?? () => Navigator.pop(context)),
+                  actions: _selecting
+                      ? [
+                          IconBtn('trash',
+                              tooltip: 'Delete',
+                              onTap: (_busy != null ||
+                                      listing == null ||
+                                      _selected.isEmpty)
+                                  ? null
+                                  : () => _deleteSelected(listing.path)),
+                          IconBtn('x', tooltip: 'Cancel', onTap: _exitSelect),
+                        ]
+                      : [
+                          if (listing != null)
+                            IconBtn('git-branch',
+                                tooltip: 'Git',
+                                onTap: () => _openGit(listing.path)),
+                          if (listing != null)
+                            IconBtn('upload',
+                                tooltip: 'Upload files',
+                                onTap: _busy != null
+                                    ? null
+                                    : () => _upload(listing.path)),
+                          if (listing != null)
+                            IconBtn('folder-plus',
+                                tooltip: 'New folder',
+                                onTap: _busy != null
+                                    ? null
+                                    : () => _newFolder(listing.path)),
+                        ],
+                ),
+                // Prominent CTA: start a chat in the folder you're browsing (no session needed).
+                if (!_selecting && listing != null && widget.onNewChat != null)
+                  Material(
+                    color: AppColors.accentBg,
+                    child: InkWell(
+                      onTap: () => widget.onNewChat!(listing.path),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 13),
+                        decoration: const BoxDecoration(
+                            border: Border(
+                                bottom: BorderSide(color: AppColors.border))),
+                        child: Row(children: [
+                          const AppIcon('edit',
+                              size: 16, color: AppColors.accent),
+                          const SizedBox(width: 10),
+                          Expanded(
+                              child: Text('New chat in this folder',
+                                  style: sans(13.5,
+                                      weight: FontWeight.w600,
+                                      color: AppColors.accent))),
+                          const AppIcon('arrow-right',
+                              size: 15, color: AppColors.accent),
+                        ]),
+                      ),
+                    ),
+                  ),
+                if (_busy != null)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                    decoration: const BoxDecoration(
+                        border: Border(
+                            bottom: BorderSide(color: AppColors.border))),
+                    child: Row(children: [
+                      const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: AppColors.accent)),
+                      const SizedBox(width: 10),
+                      Text(_busy!, style: sans(12, color: AppColors.fg2)),
+                    ]),
+                  ),
+                if (segs.isNotEmpty)
+                  Container(
+                    height: 40,
+                    decoration: const BoxDecoration(
+                        border: Border(
+                            bottom: BorderSide(color: AppColors.border))),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(children: [
-                        const AppIcon('edit', size: 16, color: AppColors.accent),
-                        const SizedBox(width: 10),
-                        Expanded(child: Text('New chat in this folder', style: sans(13.5, weight: FontWeight.w600, color: AppColors.accent))),
-                        const AppIcon('arrow-right', size: 15, color: AppColors.accent),
+                        Text('/', style: mono(11.5, color: AppColors.fg4)),
+                        for (var i = 0; i < segs.length; i++) ...[
+                          if (i > 0)
+                            const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 2),
+                                child: AppIcon('chevron-right',
+                                    size: 13, color: AppColors.fg4)),
+                          Text(segs[i],
+                              style: mono(11.5,
+                                  color: i == segs.length - 1
+                                      ? AppColors.fg1
+                                      : AppColors.fg3)),
+                        ],
                       ]),
                     ),
                   ),
+                Expanded(
+                  child: snap.connectionState == ConnectionState.waiting
+                      ? const Center(
+                          child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: AppColors.fg3)))
+                      : snap.hasError
+                          ? Center(
+                              child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Text('${snap.error}',
+                                      textAlign: TextAlign.center,
+                                      style: sans(12.5, color: AppColors.fg3))))
+                          : ListView(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                              children: [
+                                if (listing!.parent != null && !_selecting)
+                                  _Row(
+                                      icon: 'folder-open',
+                                      name: '..',
+                                      muted: true,
+                                      onTap: () => _go(listing.parent)),
+                                ...listing.entries.map((e) => _Row(
+                                      icon: e.isDir ? 'folder' : 'file',
+                                      name: e.name,
+                                      git: e.git,
+                                      chevron: e.isDir && !_selecting,
+                                      selecting: _selecting,
+                                      selected: _selected.contains(e.path),
+                                      onTap: _selecting
+                                          ? () => _toggle(e)
+                                          : (e.isDir
+                                              ? () => _go(e.path)
+                                              : () => _openFile(e)),
+                                      onLongPress: () => _selecting
+                                          ? _toggle(e)
+                                          : _enterSelect(e),
+                                    )),
+                              ],
+                            ),
                 ),
-              if (_busy != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                  decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
-                  child: Row(children: [
-                    const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent)),
-                    const SizedBox(width: 10),
-                    Text(_busy!, style: sans(12, color: AppColors.fg2)),
-                  ]),
-                ),
-              if (segs.isNotEmpty)
-                Container(
-                  height: 40,
-                  decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(children: [
-                      Text('/', style: mono(11.5, color: AppColors.fg4)),
-                      for (var i = 0; i < segs.length; i++) ...[
-                        if (i > 0) const Padding(padding: EdgeInsets.symmetric(horizontal: 2), child: AppIcon('chevron-right', size: 13, color: AppColors.fg4)),
-                        Text(segs[i], style: mono(11.5, color: i == segs.length - 1 ? AppColors.fg1 : AppColors.fg3)),
-                      ],
-                    ]),
-                  ),
-                ),
-              Expanded(
-                child: snap.connectionState == ConnectionState.waiting
-                    ? const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3)))
-                    : snap.hasError
-                        ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}', textAlign: TextAlign.center, style: sans(12.5, color: AppColors.fg3))))
-                        : ListView(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            children: [
-                              if (listing!.parent != null && !_selecting)
-                                _Row(icon: 'folder-open', name: '..', muted: true, onTap: () => _go(listing.parent)),
-                              ...listing.entries.map((e) => _Row(
-                                    icon: e.isDir ? 'folder' : 'file',
-                                    name: e.name,
-                                    git: e.git,
-                                    chevron: e.isDir && !_selecting,
-                                    selecting: _selecting,
-                                    selected: _selected.contains(e.path),
-                                    onTap: _selecting ? () => _toggle(e) : (e.isDir ? () => _go(e.path) : () => _openFile(e)),
-                                    onLongPress: () => _selecting ? _toggle(e) : _enterSelect(e),
-                                  )),
-                            ],
-                          ),
-              ),
-            ]),
+              ]),
             );
           },
         ),
@@ -312,16 +419,23 @@ class _Row extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           child: Row(children: [
             if (selecting) ...[_checkbox(selected), const SizedBox(width: 11)],
-            AppIcon(icon, size: 18, color: isFile ? AppColors.fg3 : AppColors.accent),
+            AppIcon(icon,
+                size: 18, color: isFile ? AppColors.fg3 : AppColors.accent),
             const SizedBox(width: 11),
-            Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: mono(13, color: muted ? AppColors.fg3 : AppColors.fg1))),
+            Expanded(
+                child: Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: mono(13,
+                        color: muted ? AppColors.fg3 : AppColors.fg1))),
             if (git) ...[
               const AppIcon('git-branch', size: 12, color: AppColors.ok),
               const SizedBox(width: 4),
               Text('git', style: mono(10.5, color: AppColors.fg3)),
               const SizedBox(width: 8),
             ],
-            if (chevron) const AppIcon('chevron-right', size: 16, color: AppColors.fg4),
+            if (chevron)
+              const AppIcon('chevron-right', size: 16, color: AppColors.fg4),
           ]),
         ),
       ),
@@ -335,9 +449,13 @@ class _Row extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: on ? AppColors.accent : Colors.transparent,
-          border: Border.all(color: on ? AppColors.accent : AppColors.border2, width: 1.5),
+          border: Border.all(
+              color: on ? AppColors.accent : AppColors.border2, width: 1.5),
         ),
-        child: on ? const Icon(Icons.check_rounded, size: 12, color: AppColors.accentFg) : null,
+        child: on
+            ? const Icon(Icons.check_rounded,
+                size: 12, color: AppColors.accentFg)
+            : null,
       );
 }
 
@@ -347,7 +465,12 @@ class FileViewer extends StatefulWidget {
   final String path;
   final String name;
   final VoidCallback? onClose;
-  const FileViewer({super.key, required this.client, required this.path, required this.name, this.onClose});
+  const FileViewer(
+      {super.key,
+      required this.client,
+      required this.path,
+      required this.name,
+      this.onClose});
   @override
   State<FileViewer> createState() => _FileViewerState();
 }
@@ -359,12 +482,22 @@ class _FileViewerState extends State<FileViewer> {
   bool _downloading = false;
   String? _error;
 
-  static const _imageExts = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'heic', 'heif'};
+  static const _imageExts = {
+    'png',
+    'jpg',
+    'jpeg',
+    'gif',
+    'webp',
+    'bmp',
+    'heic',
+    'heif'
+  };
   static const _videoExts = {'mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi'};
   String get _ext {
     final d = widget.name.lastIndexOf('.');
     return d >= 0 ? widget.name.substring(d + 1).toLowerCase() : '';
   }
+
   bool get _isImage => _imageExts.contains(_ext);
   bool get _isVideo => _videoExts.contains(_ext);
   bool get _isMedia => _isImage || _isVideo;
@@ -434,16 +567,29 @@ class _FileViewerState extends State<FileViewer> {
       body: SafeArea(
         bottom: false,
         child: Column(children: [
-          SnAppBar(title: widget.name, subtitle: widget.path, onBack: widget.onClose ?? () => Navigator.pop(context), actions: [
-            IconBtn('download', tooltip: 'Download', onTap: _downloading ? null : _download),
-            // Editing is text-only.
-            if (!_isMedia)
-              IconBtn('edit', tooltip: 'Edit', onTap: () => presentScreen(context,
-                style: PanelStyle.dialog,
-                dismissible: false,
-                builder: (_, close) => EditorScreen(client: widget.client, path: widget.path, name: widget.name, onClose: close),
-              ).then((_) => _load())),
-          ]),
+          SnAppBar(
+              title: widget.name,
+              subtitle: widget.path,
+              onBack: widget.onClose ?? () => Navigator.pop(context),
+              actions: [
+                IconBtn('download',
+                    tooltip: 'Download',
+                    onTap: _downloading ? null : _download),
+                // Editing is text-only.
+                if (!_isMedia)
+                  IconBtn('edit',
+                      tooltip: 'Edit',
+                      onTap: () => presentScreen(
+                            context,
+                            style: PanelStyle.dialog,
+                            dismissible: false,
+                            builder: (_, close) => EditorScreen(
+                                client: widget.client,
+                                path: widget.path,
+                                name: widget.name,
+                                onClose: close),
+                          ).then((_) => _load())),
+              ]),
           if (_isImage)
             Expanded(
               child: ColoredBox(
@@ -457,8 +603,16 @@ class _FileViewerState extends State<FileViewer> {
                       fit: BoxFit.contain,
                       loadingBuilder: (ctx, child, prog) => prog == null
                           ? child
-                          : const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))),
-                      errorBuilder: (ctx, e, st) => EmptyState(icon: 'alert-triangle', title: "Can't load image", body: '$e'),
+                          : const Center(
+                              child: SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: AppColors.fg3))),
+                      errorBuilder: (ctx, e, st) => EmptyState(
+                          icon: 'alert-triangle',
+                          title: "Can't load image",
+                          body: '$e'),
                     ),
                   ),
                 ),
@@ -467,17 +621,33 @@ class _FileViewerState extends State<FileViewer> {
           else if (_isVideo)
             Expanded(child: _VideoView(url: widget.client.fileUrl(widget.path)))
           else if (_loading)
-            const Expanded(child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3))))
+            const Expanded(
+                child: Center(
+                    child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppColors.fg3))))
           else if (_error != null)
-            Expanded(child: EmptyState(icon: 'alert-triangle', title: 'Failed to load', body: _error!))
+            Expanded(
+                child: EmptyState(
+                    icon: 'alert-triangle',
+                    title: 'Failed to load',
+                    body: _error!))
           else if (f!.binary)
-            Expanded(child: EmptyState(icon: 'file', title: 'Binary file', body: '${formatBytes(f.size)} — can\'t display as text.'))
+            Expanded(
+                child: EmptyState(
+                    icon: 'file',
+                    title: 'Binary file',
+                    body: '${formatBytes(f.size)} — can\'t display as text.'))
           else ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
-              child: Text('${f.content.split('\n').length} lines · ${formatBytes(f.size)}${f.truncated ? ' · truncated' : ''}',
+              decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: AppColors.border))),
+              child: Text(
+                  '${f.content.split('\n').length} lines · ${formatBytes(f.size)}${f.truncated ? ' · truncated' : ''}',
                   style: mono(10.5, color: AppColors.fg4)),
             ),
             Expanded(
@@ -486,10 +656,15 @@ class _FileViewerState extends State<FileViewer> {
                 readOnly: true,
                 wordWrap: false,
                 style: codeEditorStyle(widget.name),
-                indicatorBuilder: (context, editingController, chunkController, notifier) {
+                indicatorBuilder:
+                    (context, editingController, chunkController, notifier) {
                   return Row(children: [
-                    DefaultCodeLineNumber(controller: editingController, notifier: notifier),
-                    DefaultCodeChunkIndicator(width: 20, controller: chunkController, notifier: notifier),
+                    DefaultCodeLineNumber(
+                        controller: editingController, notifier: notifier),
+                    DefaultCodeChunkIndicator(
+                        width: 20,
+                        controller: chunkController,
+                        notifier: notifier),
                   ]);
                 },
               ),
@@ -546,8 +721,10 @@ class _VideoViewState extends State<_VideoView> {
           autoPlay: true, // a tapped video should just start
           looping: false,
           allowFullScreen: true,
-          aspectRatio: vc.value.aspectRatio == 0 ? 16 / 9 : vc.value.aspectRatio,
-          errorBuilder: (ctx, msg) => EmptyState(icon: 'alert-triangle', title: "Can't play video", body: msg),
+          aspectRatio:
+              vc.value.aspectRatio == 0 ? 16 / 9 : vc.value.aspectRatio,
+          errorBuilder: (ctx, msg) => EmptyState(
+              icon: 'alert-triangle', title: "Can't play video", body: msg),
           materialProgressColors: ChewieProgressColors(
             playedColor: AppColors.accent,
             handleColor: AppColors.accent,
@@ -579,11 +756,17 @@ class _VideoViewState extends State<_VideoView> {
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
-      return EmptyState(icon: 'alert-triangle', title: "Can't play video", body: _error!);
+      return EmptyState(
+          icon: 'alert-triangle', title: "Can't play video", body: _error!);
     }
     final ch = _chewie;
     if (ch == null) {
-      return const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.fg3)));
+      return const Center(
+          child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.fg3)));
     }
     // Chewie sizes the video from its own aspectRatio; letterbox on black.
     return ColoredBox(color: Colors.black, child: Chewie(controller: ch));
@@ -599,52 +782,80 @@ Future<String?> downloadRemoteFile(
   required String path,
   required String name,
 }) async {
-  final bytes = await client.downloadFile(path);
   final dot = name.lastIndexOf('.');
   final ext = dot > 0 ? name.substring(dot + 1).toLowerCase() : '';
-  if (kMobile) {
-    final openFile = File('${(await getApplicationSupportDirectory()).path}/$name');
-    await openFile.writeAsBytes(bytes);
-    Future<String?> shareIt() async {
-      final res = await Share.shareXFiles([XFile(openFile.path, name: name)]);
-      return res.status == ShareResultStatus.success ? 'Saved $name' : null;
-    }
-
-    if (Platform.isAndroid) {
-      var saved = false;
-      try {
-        final storeTemp = File('${(await getTemporaryDirectory()).path}/$name');
-        await storeTemp.writeAsBytes(bytes);
-        await MediaStore.ensureInitialized();
-        MediaStore.appFolder = 'Snippet';
-        final info = await MediaStore().saveFile(
-          tempFilePath: storeTemp.path,
-          dirType: DirType.download,
-          dirName: DirName.download,
-          relativePath: FilePath.root,
-        );
-        saved = info != null;
-      } catch (_) {
-        saved = false;
-      }
-      if (saved) {
-        notifyDownload(name, openFile.path);
-        if (context.mounted) {
-          await _downloadDoneSheetFor(context, name, openFile.path);
+  final progressId = await notifyDownloadStarted(name);
+  final tempDir = await getTemporaryDirectory();
+  final tempFile = File(
+      '${tempDir.path}/snippet-download-${DateTime.now().microsecondsSinceEpoch}-$name');
+  try {
+    await client.downloadToFile(
+      path,
+      tempFile,
+      onProgress: (received, total) {
+        if (total != null && total > 0) {
+          final percent = ((received * 100) ~/ total).clamp(0, 100);
+          notifyDownloadProgress(progressId, name, percent);
         }
-        return null;
+      },
+    );
+
+    if (kMobile) {
+      final supportFile =
+          File('${(await getApplicationSupportDirectory()).path}/$name');
+      await supportFile.parent.create(recursive: true);
+      await tempFile.copy(supportFile.path);
+      Future<String?> shareIt() async {
+        final res =
+            await Share.shareXFiles([XFile(supportFile.path, name: name)]);
+        return res.status == ShareResultStatus.success ? 'Saved $name' : null;
       }
+
+      if (Platform.isAndroid) {
+        var saved = false;
+        try {
+          await MediaStore.ensureInitialized();
+          MediaStore.appFolder = 'Snippet';
+          final info = await MediaStore().saveFile(
+            tempFilePath: tempFile.path,
+            dirType: DirType.download,
+            dirName: DirName.download,
+            relativePath: FilePath.root,
+          );
+          saved = info != null;
+        } catch (_) {
+          saved = false;
+        }
+        if (saved) {
+          await notifyDownload(name, supportFile.path, id: progressId);
+          if (context.mounted) {
+            await _downloadDoneSheetFor(context, name, supportFile.path);
+          }
+          return null;
+        }
+        await notifyDownloadFailure(
+            progressId, name, 'Could not save to Downloads; sharing instead.');
+        return shareIt();
+      }
+      await notifyDownload(name, supportFile.path, id: progressId);
       return shareIt();
     }
-    return shareIt();
-  }
 
-  final saved = await FilePicker.platform.saveFile(fileName: name);
-  if (saved == null) return null;
-  final out =
-      (ext.isNotEmpty && !saved.toLowerCase().endsWith('.$ext')) ? '$saved.$ext' : saved;
-  await File(out).writeAsBytes(bytes);
-  return 'Downloaded $name';
+    final saved = await FilePicker.platform.saveFile(fileName: name);
+    if (saved == null) return null;
+    final out = (ext.isNotEmpty && !saved.toLowerCase().endsWith('.$ext'))
+        ? '$saved.$ext'
+        : saved;
+    await tempFile.copy(out);
+    return 'Downloaded $name';
+  } catch (e) {
+    await notifyDownloadFailure(progressId, name, e);
+    rethrow;
+  } finally {
+    try {
+      if (await tempFile.exists()) await tempFile.delete();
+    } catch (_) {}
+  }
 }
 
 Future<void> _downloadDoneSheetFor(
