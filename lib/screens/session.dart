@@ -782,14 +782,6 @@ class _SessionScreenState extends State<SessionScreen>
         _toast('The recording was empty.');
         return false;
       }
-      await _ingest([
-        (
-          name: 'voice-${DateTime.now().microsecondsSinceEpoch}.m4a',
-          localPath: path,
-          readBytes: () async => bytes,
-        )
-      ]);
-      await _audioPlayer.stop();
       if (mounted) {
         setState(() {
           _recordingPath = null;
@@ -799,6 +791,14 @@ class _SessionScreenState extends State<SessionScreen>
           _isPlayingRecording = false;
         });
       }
+      await _ingest([
+        (
+          name: 'voice-${DateTime.now().microsecondsSinceEpoch}.m4a',
+          localPath: path,
+          readBytes: () async => bytes,
+        )
+      ]);
+      await _audioPlayer.stop();
       final file = File(path);
       if (await file.exists()) await file.delete();
       return true;
