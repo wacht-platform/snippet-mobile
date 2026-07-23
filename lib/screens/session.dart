@@ -985,6 +985,7 @@ class _SessionScreenState extends State<SessionScreen>
         .map((p) => _Attachment(
             name: p.name,
             isImage: _isImageName(p.name),
+            isAudio: isAudioAttachmentPath(p.name),
             localPath: p.localPath))
         .toList();
     if (entries.isEmpty) return;
@@ -1018,10 +1019,13 @@ class _SessionScreenState extends State<SessionScreen>
   // surface as AttachmentPill beside the text — same as a real Bubble.
   String _queuedText(String m) => hideAttachmentMarkers(m);
 
-  (int images, int files) _queuedAttachCounts(String m) {
-    final matches = RegExp(r'\[attached (image|file) —[^\]]*\]').allMatches(m);
+  (int audio, int images, int files) _queuedAttachCounts(String m) {
+    final matches =
+        RegExp(r'\[attached (image|file) —([^\]]*)\]').allMatches(m);
+    final audio =
+        matches.where((x) => isAudioAttachmentPath(x.group(2) ?? '')).length;
     final images = matches.where((x) => x.group(1) == 'image').length;
-    return (images, matches.length - images);
+    return (audio, images, matches.length - images - audio);
   }
 
   void _toast(String m) {
@@ -1175,6 +1179,7 @@ class _SessionScreenState extends State<SessionScreen>
                               for (var qi = 0; qi < _queued.length; qi++)
                                 _QueuedBubble(
                                   text: _queuedText(_queued[qi]),
+                                  audio: _queuedAttachCounts(_queued[qi]).$3,
                                   images: _queuedAttachCounts(_queued[qi]).$1,
                                   files: _queuedAttachCounts(_queued[qi]).$2,
                                   onCancel: () => _cancelQueuedAt(qi),
@@ -1790,6 +1795,7 @@ class _SessionScreenState extends State<SessionScreen>
 
   Widget _attachmentTile(_Attachment a) {
     final thumb = a.isImage && a.localPath != null;
+    final isAudio = a.isAudio;
     final body = thumb
         ? ClipRRect(
             borderRadius: BorderRadius.circular(R.sm),
@@ -1801,19 +1807,22 @@ class _SessionScreenState extends State<SessionScreen>
             height: 60, // match the image thumbnails so the row is even
             padding: const EdgeInsets.symmetric(horizontal: 9),
             decoration: BoxDecoration(
-              color: AppColors.surface2,
+              color: isAudio ? AppColors.accentBg : AppColors.surface2,
               borderRadius: BorderRadius.circular(R.sm),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(
+                  color: isAudio ? AppColors.accentLine : AppColors.border),
             ),
             child: Row(children: [
-              AppIcon(a.isImage ? 'image' : 'file',
-                  size: 15, color: AppColors.fg3),
+              AppIcon(isAudio ? 'mic' : (a.isImage ? 'image' : 'file'),
+                  size: 15, color: isAudio ? AppColors.accent : AppColors.fg3),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(a.name,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: sans(10.5, height: 1.25, color: AppColors.fg2)),
+                    style: sans(10.5,
+                        height: 1.25,
+                        color: isAudio ? AppColors.accent : AppColors.fg2)),
               ),
             ]),
           );
@@ -2536,11 +2545,11 @@ class _TypingDotsState extends State<_TypingDots>
 
 class _QueuedBubble extends StatelessWidget {
   final String text;
-  final int images;
-  final int files;
+  final int audio, images, files;
   final VoidCallback onCancel;
   const _QueuedBubble({
     required this.text,
+    required this.audio,
     required this.images,
     required this.files,
     required this.onCancel,
@@ -2570,11 +2579,11 @@ class _QueuedBubble extends StatelessWidget {
                 style: sans(13.5, height: 1.5, color: AppColors.fg3)),
           ),
         ],
-        if (images + files > 0) ...[
+        if (images + files + audio > 0) ...[
           const SizedBox(height: 6),
           Padding(
             padding: const EdgeInsets.only(left: 12),
-            child: AttachmentPill(images: images, files: files),
+            child: AttachmentPill(audio: audio, images: images, files: files),
           ),
         ],
       ]),
@@ -2947,14 +2956,19 @@ class _WaveformPainter extends CustomPainter {
       oldDelegate.samples != samples;
 }
 
-/// A pending composer attachment (image or file) being uploaded to the workspace.
+/// A pending composer attachment (image, file, or audio) being uploaded.
 class _Attachment {
   final String name;
   final bool isImage;
+  final bool isAudio;
   final String? localPath; // local source (for image thumbnails)
   String? remotePath; // daemon path once uploaded
   bool uploading = true;
-  _Attachment({required this.name, required this.isImage, this.localPath});
+  _Attachment(
+      {required this.name,
+      required this.isImage,
+      required this.isAudio,
+      this.localPath});
 }
 
 /// Inline circular send button for the composer.

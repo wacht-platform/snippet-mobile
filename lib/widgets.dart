@@ -750,10 +750,25 @@ class _DashedBorder extends CustomPainter {
 /// Internal attachment and transcription markers are agent-facing metadata, not
 /// user-facing chat text.
 final RegExp _attachMarkerRe =
-    RegExp(r'\[attached (image|file) —[^\]]*\]', multiLine: true);
+    RegExp(r'\[attached (image|file) —([^\]]*)\]', multiLine: true);
 final RegExp _audioTranscriptRe = RegExp(
   r'(?:\r?\n)*\[Audio transcript for [^\]\r\n]+\]\r?\n[\s\S]*$',
 );
+
+bool isAudioAttachmentPath(String value) {
+  final path = value.trim().toLowerCase();
+  return const [
+    '.aac',
+    '.flac',
+    '.m4a',
+    '.mp3',
+    '.oga',
+    '.ogg',
+    '.opus',
+    '.wav',
+    '.webm',
+  ].any(path.endsWith);
+}
 
 /// Strip internal attachment/transcription metadata from displayed text. The
 /// original message still contains it when sent to the daemon, so the agent can
@@ -766,24 +781,37 @@ String hideAttachmentMarkers(String raw) => raw
 /// Read-only attachment summary on a sent message — icon + count, no emoji.
 /// Images and files each get their own compact pill (matches desktop).
 class AttachmentPill extends StatelessWidget {
-  final int images, files;
-  const AttachmentPill({super.key, required this.images, required this.files});
+  final int audio, images, files;
+  const AttachmentPill({
+    super.key,
+    required this.audio,
+    required this.images,
+    required this.files,
+  });
   @override
   Widget build(BuildContext context) {
-    Widget pill(String icon, String label) => Container(
+    Widget pill(String icon, String label, {bool isAudio = false}) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: AppColors.surface2,
+            color: isAudio ? AppColors.accentBg : AppColors.surface2,
             borderRadius: BorderRadius.circular(R.card),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(
+                color: isAudio ? AppColors.accentLine : AppColors.border),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            AppIcon(icon, size: 13, color: AppColors.fg3),
+            AppIcon(icon,
+                size: 13, color: isAudio ? AppColors.accent : AppColors.fg3),
             const SizedBox(width: 6),
-            Text(label, style: sans(12.5, color: AppColors.fg2)),
+            Text(label,
+                style: sans(12.5,
+                    color: isAudio ? AppColors.accent : AppColors.fg2)),
           ]),
         );
     final pills = <Widget>[];
+    if (audio > 0) {
+      pills.add(
+          pill('mic', audio == 1 ? 'audio' : '$audio audio', isAudio: true));
+    }
     if (images > 0) {
       pills.add(pill('image', images == 1 ? 'image' : '$images images'));
     }
@@ -809,8 +837,10 @@ class Bubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final matches = _attachMarkerRe.allMatches(text).toList();
     final shown = hideAttachmentMarkers(text);
+    final audio =
+        matches.where((m) => isAudioAttachmentPath(m.group(2) ?? '')).length;
     final images = matches.where((m) => m.group(1) == 'image').length;
-    final files = matches.length - images;
+    final files = matches.length - images - audio;
     // Clean, Claude-style: a readable sender header (no accent bar / outline),
     // differentiated by name + colour rather than a border.
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -830,7 +860,7 @@ class Bubble extends StatelessWidget {
         // A sent attachment stays visible as a pill (below any text it came with).
         if (matches.isNotEmpty) ...[
           if (shown.isNotEmpty) const SizedBox(height: 8),
-          AttachmentPill(images: images, files: files),
+          AttachmentPill(audio: audio, images: images, files: files),
         ],
       ] else ...[
         // selectable: false on purpose — with `true`, EVERY markdown block is its
