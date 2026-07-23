@@ -365,12 +365,17 @@ class _MdCodeBlockState extends State<_MdCodeBlock> {
         ),
         child: Stack(
           children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(14, 14, 44, 14),
-              child: Text(
-                widget.code,
-                style: mono(13, height: 1.55, color: AppColors.fg1),
+            // Keep code-block scroll notifications from reaching the shell's
+            // PageView/drawer gesture handler.
+            NotificationListener<ScrollNotification>(
+              onNotification: (_) => true,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(14, 14, 44, 14),
+                child: Text(
+                  widget.code,
+                  style: mono(13, height: 1.55, color: AppColors.fg1),
+                ),
               ),
             ),
             Positioned(
